@@ -395,7 +395,9 @@ const BATT={
   cr2032:{label:'Pila CR2032',short:'CR2032',vlo:2.0,vhi:3.0,d:20,fp:'Battery:BatteryHolder_Keystone_3034_1x20mm',mAh:220,v:3.0,g:3.9,maxmA:15},
   cr1220:{label:'Pila CR1220',short:'CR1220',vlo:2.0,vhi:3.0,d:12.5,fp:'Battery:BatteryHolder_Keystone_3001_1x12mm',mAh:38,v:3.0,g:1.4,maxmA:5},
   lipo70:{label:'LiPo 301020 · 70 mAh + USB-C',short:'LiPo 70 mAh',vlo:3.0,vhi:4.2,w:10,h:20,fp:'Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal',mAh:70,v:3.7,g:2.0,maxmA:70,usb:true},
-  lipo180:{label:'LiPo 402030 · 180 mAh + USB-C',short:'LiPo 180 mAh',vlo:3.0,vhi:4.2,w:20,h:30,fp:'Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal',mAh:180,v:3.7,g:4.2,maxmA:180,usb:true}
+  lipo180:{label:'LiPo 402030 · 180 mAh + USB-C',short:'LiPo 180 mAh',vlo:3.0,vhi:4.2,w:20,h:30,fp:'Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal',mAh:180,v:3.7,g:4.2,maxmA:180,usb:true},
+  sc1f:{label:'Supercondensador 1 F 5,5 V + USB-C',short:'Supercap 1 F',lcsc:'C7461329',supercap:true,F:1,vCharge:5.0,vlo:2.7,vhi:5.0,d:19.5,fp:'Capacitor_THT:CP_Radial_D20.0mm_P5.00mm',mAh:0,v:5.0,g:2.5,maxmA:300,usb:true},
+  sc15f:{label:'Supercondensador 15 F 2,7 V + USB-C',short:'Supercap 15 F',lcsc:'C24833990',supercap:true,F:15,vCharge:2.5,vlo:1.8,vhi:2.5,w:12.5,h:25,fp:'Capacitor_THT:CP_Radial_D12.5mm_P5.00mm',mAh:0,v:2.5,g:7,maxmA:500,usb:true}
 };
 const MCUS={
   ninguno:{label:'Sin microcontrolador',short:'Ninguno',lcsc:null,pkg:'',pins:0,vmin:0,vmax:99,extras:[],prog:null,w:0,h:0,fp:'',mA:0},
@@ -620,7 +622,9 @@ function derive(){
     if(c.kind==='rgb'){avg+=1+4*F[c.beh]; peak+=13;}
     if(c.kind==='termo'){const d={tacto:0.1,ciclo:0.5,boton:0.15}[c.act]; avg+=c.heatI*d; peak+=c.heatI;}
   });
-  const hours=avg>0?B.mAh*0.8/avg:Infinity;
+  let minutes=null, hours=avg>0?B.mAh*0.8/avg:Infinity;
+  if(B.supercap){ const maxVf=Math.max(0,...comps.filter(c=>c.kind==='led').map(c=>LED_COLORS[c.color].vf),...(comps.some(c=>c.kind==='rgb')?[3.3]:[]));
+    const vCut=Math.max(needMCU?M.vmin:0,maxVf+0.3); minutes=avg>0?Math.max(0,B.F*(B.vCharge-vCut)/(avg/1000)/60):Infinity; hours=minutes/60; }
   const ctr=GEO.centroid||{x:W/2,y:H/2};
   const parts=[], tracksF=[], tracksB=[], vias=[], holes=[];
   const zones=comps.filter(c=>c.kind==='termo').map(c=>c.zone);
@@ -641,7 +645,7 @@ function derive(){
     const t=curve(batPlus,mcu,0.15); tracksB.push({net:'VBAT',w:tw.pwr,...t}); }
   const hub=mcu?{x:mcu.x,y:mcu.y}:batPlus;
   if(B.usb){ const bx=ctr.x,by=bottomY(bx)-4.6; parts.push({ref:'J1',kind:'usb',x:bx,y:by,w:9,h:7.3,fp:'Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal',val:'USB-C 5 V',side:'B'});
-    const ch={ref:'U2',kind:'ic',x:bx+(bw+3>9?7:-7),y:by-2.5,w:3,h:1.7,fp:'Package_TO_SOT_SMD:SOT-23-5',val:'TP4054 cargador',side:'B'}; parts.push(ch);
+    const ch={ref:'U2',kind:'ic',x:bx+(bw+3>9?7:-7),y:by-2.5,w:3,h:1.7,fp:'Package_TO_SOT_SMD:SOT-23-5',val:B.supercap?(bk==='sc15f'?'Regulador 2,5 V (carga)':'Carga: Schottky + resistencia'):'TP4054 cargador',side:'B'}; parts.push(ch);
     tracksB.push({net:'VUSB',w:tw.pwr,...curve({x:bx,y:by-2},ch,0.2)}); tracksB.push({net:'VBAT',w:tw.pwr,...curve(ch,batPlus,-0.2)}); }
   let rn=0,qn=0;
   const front=comps.filter(c=>c.kind==='led'||c.kind==='touch');
@@ -697,6 +701,13 @@ function derive(){
   comps.forEach(c=>{ if(!insideBoard(c.x,c.y)) warns.push({lv:'crit',t:`${c.ref||'Un componente'} quedó fuera de la placa. Arrástralo hacia adentro.`}); });
   if(GEO.islands) warns.push({lv:'warn',t:'El dibujo tiene partes separadas y la placa sigue solo la silueta principal. Sube el margen para unirlas.'});
   if(GEO.polyNote) warns.push({lv:'warn',t:GEO.polyNote});
+  if(B.supercap&&comps.length){
+    if(S.product==='aro') warns.push({lv:'crit',t:'Los aros no admiten supercondensadores: pesan y abultan demasiado para una oreja. Usa pila o LiPo.'});
+    if(bk==='sc15f') comps.filter(c=>c.kind==='led'&&LED_COLORS[c.color].vf>2.1).forEach(c=>warns.push({lv:'crit',t:`Con el supercondensador de 15 F (máx. 2,5 V) el LED ${c.ref} ${LED_COLORS[c.color].label.toLowerCase()} no enciende. Usa rojo o ámbar.`}));
+    if(bk==='sc15f'&&has('rgb')) warns.push({lv:'crit',t:'Las luces de colores (WS2812) necesitan más de 3,3 V: no funcionan con el supercondensador de 15 F.'});
+    if(minutes!==null&&minutes<10) warns.push({lv:'warn',t:`Con ${B.short} la autonomía es de solo ${fmt(minutes,1)} min (menos de 10 min). Sirve para demostraciones; para uso diario elige LiPo.`});
+    else if(minutes!==null) warns.push({lv:'info',t:`El ${B.short} se carga en segundos por USB-C y dura unos ${fmt(minutes,0)} min por carga.`});
+  }
   if(!warns.some(w=>w.lv!=='info')&&comps.length) warns.unshift({lv:'ok',t:'Sin problemas de energía ni de tamaño.'});
   if(comps.length){
     if(mcuAuto&&!M) warns.push({lv:'crit',t:`Ningún microcontrolador de la lista sirve para ${pinsReq} patas con ${B.short}. Reduce interacciones o elige otra energía.`});
@@ -704,7 +715,7 @@ function derive(){
     if(M&&needMCU&&M.extras.includes('regulador 3,3 V')&&(!B.usb||B.supercap)) warns.push({lv:'crit',t:`El ${M.short} necesita una LiPo con USB-C (usa regulador de 3,3 V y consume ${M.mA} mA).`});
     else if(M&&needMCU&&!mcuFits(M,B)) warns.push({lv:'crit',t:`El ${M.short} funciona entre ${fmt(M.vmin,1)} y ${fmt(M.vmax,1)} V, pero la ${B.short} entrega entre ${fmt(B.vlo,1)} y ${fmt(B.vhi,1)} V.`});
   }
-  return {mcuId:mcuId||'ninguno',mcuAuto,pinsReq,M,W,H,fab,P,mount,tw,comps,needMCU,B,bk,auto,avg,peak,hours,parts,tracksF,tracksB,vias,holes,weight,warns,ctr,heatPeak,hub,batPlus};
+  return {minutes,mcuId:mcuId||'ninguno',mcuAuto,pinsReq,M,W,H,fab,P,mount,tw,comps,needMCU,B,bk,auto,avg,peak,hours,parts,tracksF,tracksB,vias,holes,weight,warns,ctr,heatPeak,hub,batPlus};
 }
 
 /* ---------- Dibujo ---------- */
@@ -763,7 +774,7 @@ function drawBack(Dv){
   });
   Dv.parts.forEach(p=>{
     if(p.kind==='bat'){ if(p.r){ el('rect',{x:p.x-p.r-1.6,y:p.y-2,width:2*p.r+3.2,height:4,rx:0.5,fill:'#9aa1a8'},g); el('circle',{cx:p.x,cy:p.y,r:p.r,fill:'#c3c9cf',stroke:'#7e868e','stroke-width':0.3},g); el('circle',{cx:p.x,cy:p.y,r:p.r*0.78,fill:'#dde1e4'},g); label(g,p.x,p.y+0.5,p.val+' +',Math.max(1.4,p.r*0.22)); }
-      else { el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:1.2,fill:'#c9cdd1',stroke:'#7e868e','stroke-width':0.3},g); label(g,p.x,p.y,'LiPo',Math.min(2,p.w*0.22)); } }
+      else { el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:1.2,fill:'#c9cdd1',stroke:'#7e868e','stroke-width':0.3},g); label(g,p.x,p.y,/^Supercap/.test(p.val)?p.val.replace('Supercap ',''):'LiPo',Math.min(2,p.w*0.22)); } }
     if(p.kind==='mcu'){ const w=p.w||4.9,h=p.h||3.9,n=Math.max(2,Math.round(h/1.27)); for(let k=0;k<n;k++){ const yy=p.y-h/2+(k+0.5)*h/n-0.3; el('rect',{x:p.x-w/2-0.9,y:yy,width:1,height:0.6,fill:PAD},g); el('rect',{x:p.x+w/2-0.1,y:yy,width:1,height:0.6,fill:PAD},g);} el('rect',{x:p.x-w/2,y:p.y-h/2,width:w,height:h,rx:0.3,fill:'#202326'},g); label(g,p.x,p.y+0.4,'U1',Math.min(1.2,w*0.25)); }
     if(p.kind==='usb'){ el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:0.8,fill:'#b7bdc3',stroke:'#7e868e','stroke-width':0.3},g); el('rect',{x:p.x-3,y:p.y+p.h/2-1.4,width:6,height:1.2,rx:0.6,fill:'#2a2d30'},g); label(g,p.x,p.y,'USB-C',1.3); }
     if(p.kind==='ic'||p.kind==='q'){ el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:0.15,fill:'#202326'},g); el('rect',{x:p.x-p.w/2+0.2,y:p.y+p.h/2,width:0.5,height:0.5,fill:PAD},g); el('rect',{x:p.x+p.w/2-0.7,y:p.y+p.h/2,width:0.5,height:0.5,fill:PAD},g); el('rect',{x:p.x-0.25,y:p.y-p.h/2-0.5,width:0.5,height:0.5,fill:PAD},g); }
@@ -917,7 +928,7 @@ function renderSel(){ const p=$('#selPanel'); const c=S.comps.find(x=>x.id===S.s
   if(c.kind==='touch') h+='<p class="note">Pad de cobre conectado al microcontrolador por una vía.</p>';
   p.innerHTML=h; }
 function renderSummary(){ const d=D;
-  const hrs=d.hours===Infinity?'—':d.hours>=48?fmt(d.hours/24,0)+' días':fmt(d.hours,d.hours<10?1:0)+' h';
+  const hrs=d.hours===Infinity?'—':(d.minutes!==null&&d.minutes<120)?fmt(d.minutes,d.minutes<10?1:0)+' min':d.hours>=48?fmt(d.hours/24,0)+' días':fmt(d.hours,d.hours<10?1:0)+' h';
   $('#kpis').innerHTML=`<div class="kpi"><b>${hrs}</b><span>Autonomía de uso continuo</span></div><div class="kpi"><b>${fmt(d.weight)} g</b><span>Peso ${S.product==='aro'?'de cada aro':'aprox.'}</span></div><div class="kpi"><b>${d.comps.length}</b><span>Interacciones</span></div>`;
   const facts=[['Placa',`${fmt(d.W)} × ${fmt(d.H)} × ${d.P.thick} mm`],['Fabricación',S.fab==='fab'?'PCB de fábrica, máscara '+MASK_LBL[S.mask].toLowerCase():'Fresado en Makera Z1'],['Energía',d.B.label+(d.auto?' · auto':'')],['Consumo medio / pico',`${fmt(d.avg,1)} / ${fmt(d.peak,0)} mA`],['Cerebro',d.needMCU?`${d.M.short} (${d.pinsReq}/${d.M.pins} patas)`:'No necesita'],['Pistas señal / potencia',`${d.tw.sig} / ${d.tw.pwr} mm`]];
   if(S.product==='aro') facts.splice(1,0,['Cantidad','2 placas (par)']);
@@ -931,7 +942,7 @@ function bomRows(d){ const m=new Map(); const add=(ref,val,fp,side,note)=>{const
     if(c.kind==='touch') add(c.ref,'Pad de toque (cobre)','TestPoint:TestPoint_Pad_D4.0mm','F');
     if(c.kind==='button') add(c.ref,'Pulsador SMD','Button_Switch_SMD:SW_SPST_PTS810','B');
     if(c.kind==='termo') add(c.ref,'Pintura termocrómica '+PIGMENTS[c.pigment].label,'','F','Aplicar sobre el cobre de la zona'); });
-  d.parts.forEach(p=>{ if(p.kind==='bat'){ add(p.ref,'Portapilas / conector '+d.B.short,p.fp,'B'); add('—',d.B.usb?'Celda '+d.B.short:'Pila '+d.B.short,'','B','Batería'); } else add(p.ref,p.val,p.fp,'B',[p.note,p.lcsc?'LCSC '+p.lcsc:''].filter(Boolean).join(' · ')); });
+  d.parts.forEach(p=>{ if(p.kind==='bat'&&d.B.supercap){ add(p.ref,d.B.label.replace(' + USB-C',''),p.fp,'B','LCSC '+d.B.lcsc); } else if(p.kind==='bat'){ add(p.ref,'Portapilas / conector '+d.B.short,p.fp,'B'); add('—',d.B.usb?'Celda '+d.B.short:'Pila '+d.B.short,'','B','Batería'); } else add(p.ref,p.val,p.fp,'B',[p.note,p.lcsc?'LCSC '+p.lcsc:''].filter(Boolean).join(' · ')); });
   const mt=d.mount; if(mt.id==='broche') add('—','Broche mariposa con poste','','B','Hardware'); if(mt.id==='gancho') add('—','Gancho de aro (plata 925 o acero)','','—','Hardware'); if(mt.id==='argolla') add('—','Argolla abierta 6 mm','','—','Hardware');
   const rows=[...m.values()].map(r=>({...r,refs:r.refs.length>3?r.refs[0]+'…'+r.refs[r.refs.length-1]:r.refs.join(', ')}));
   if(S.product==='aro') rows.forEach(r=>{r.qty*=2;}); return rows; }
