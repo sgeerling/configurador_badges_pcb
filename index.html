@@ -50,6 +50,7 @@ button,select,input{font:inherit;color:inherit}
 .primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:9px 16px;font-weight:600;cursor:pointer}
 .primary:hover{filter:brightness(1.07)}
 .hist{display:flex;gap:4px}.hist button{font-size:18px;line-height:1;padding:6px 11px}.hist button:disabled{opacity:.35;cursor:default}
+#backLayer .free{opacity:.6;pointer-events:none}
 .ghost{background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
 .ghost:hover{border-color:var(--accent)}
 .link{background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-weight:600;font-size:13.5px}
@@ -715,6 +716,7 @@ function derive(){
     if(M&&needMCU&&M.extras.includes('regulador 3,3 V')&&(!B.usb||B.supercap)) warns.push({lv:'crit',t:`El ${M.short} necesita una LiPo con USB-C (usa regulador de 3,3 V y consume ${M.mA} mA).`});
     else if(M&&needMCU&&!mcuFits(M,B)) warns.push({lv:'crit',t:`El ${M.short} funciona entre ${fmt(M.vmin,1)} y ${fmt(M.vmax,1)} V, pero la ${B.short} entrega entre ${fmt(B.vlo,1)} y ${fmt(B.vhi,1)} V.`});
   }
+  parts.forEach(p=>{ p.free=true; });
   return {minutes,mcuId:mcuId||'ninguno',mcuAuto,pinsReq,M,W,H,fab,P,mount,tw,comps,needMCU,B,bk,auto,avg,peak,hours,parts,tracksF,tracksB,vias,holes,weight,warns,ctr,heatPeak,hub,batPlus};
 }
 
@@ -772,7 +774,10 @@ function drawBack(Dv){
     else c.hPos.forEach(h=>{ el('rect',{x:h.x-1.9,y:h.y-0.8,width:0.7,height:1.6,fill:PAD},g); el('rect',{x:h.x+1.2,y:h.y-0.8,width:0.7,height:1.6,fill:PAD},g); el('rect',{x:h.x-1.3,y:h.y-0.8,width:2.6,height:1.6,rx:0.1,fill:'#1d1f22'},g); });
     if(showLbl) label(g,z.x+z.w/2,z.y-1.2,'calor '+c.ref,1.2);
   });
-  Dv.parts.forEach(p=>{
+  const G=g;
+  Dv.parts.forEach(p=>{ const g=el('g',{class:'free','data-free':p.ref},G);
+    const fw=p.r?2*p.r:(p.w||1.6), fh=p.r?2*p.r:(p.h||0.8);
+    el('rect',{x:p.x-fw/2-0.6,y:p.y-fh/2-0.6,width:fw+1.2,height:fh+1.2,rx:0.6,fill:'none',stroke:'#9aa3ad','stroke-width':0.18,'stroke-dasharray':'0.7 0.5'},g);
     if(p.kind==='bat'){ if(p.r){ el('rect',{x:p.x-p.r-1.6,y:p.y-2,width:2*p.r+3.2,height:4,rx:0.5,fill:'#9aa1a8'},g); el('circle',{cx:p.x,cy:p.y,r:p.r,fill:'#c3c9cf',stroke:'#7e868e','stroke-width':0.3},g); el('circle',{cx:p.x,cy:p.y,r:p.r*0.78,fill:'#dde1e4'},g); label(g,p.x,p.y+0.5,p.val+' +',Math.max(1.4,p.r*0.22)); }
       else { el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:1.2,fill:'#c9cdd1',stroke:'#7e868e','stroke-width':0.3},g); label(g,p.x,p.y,/^Supercap/.test(p.val)?p.val.replace('Supercap ',''):'LiPo',Math.min(2,p.w*0.22)); } }
     if(p.kind==='mcu'){ const w=p.w||4.9,h=p.h||3.9,n=Math.max(2,Math.round(h/1.27)); for(let k=0;k<n;k++){ const yy=p.y-h/2+(k+0.5)*h/n-0.3; el('rect',{x:p.x-w/2-0.9,y:yy,width:1,height:0.6,fill:PAD},g); el('rect',{x:p.x+w/2-0.1,y:yy,width:1,height:0.6,fill:PAD},g);} el('rect',{x:p.x-w/2,y:p.y-h/2,width:w,height:h,rx:0.3,fill:'#202326'},g); label(g,p.x,p.y+0.4,'U1',Math.min(1.2,w*0.25)); }
@@ -783,6 +788,7 @@ function drawBack(Dv){
     if(p.kind==='post'){ el('circle',{cx:p.x,cy:p.y,r:1,fill:PAD},g); el('circle',{cx:p.x,cy:p.y,r:0.5,fill:'#1f2b27'},g); label(g,p.x,p.y+2.4,'broche',1.1); }
     if(p.kind==='mag'){ el('circle',{cx:p.x,cy:p.y,r:p.r,fill:'#737a81',stroke:'#4f555b','stroke-width':0.3},g); label(g,p.x,p.y+0.5,'imán',1.4); }
   });
+  if(Dv.parts.length){ const t=el('text',{'data-free-label':'1',x:Dv.W/2,y:Dv.H+4.2,'text-anchor':'middle','font-size':2.2,fill:'#9aa3ad','font-family':'IBM Plex Mono, monospace'},G); t.textContent='piezas en gris: provisional · la ubica KiCad'; }
   Dv.comps.filter(c=>c.kind==='button').forEach(c=>{ const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g);
     el('rect',{x:-2.6,y:-1.8,width:5.2,height:3.6,rx:0.4,fill:'#c3c9cf',stroke:'#7e868e','stroke-width':0.25},gg); el('circle',{r:1.1,fill:'#2a2d30'},gg);
     if(S.sel===c.id) el('circle',{r:4,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'0.8 0.5'},gg); el('circle',{r:3.6,fill:'transparent'},gg); });
@@ -898,7 +904,7 @@ function renderPanels(){
   $('#btnSim').setAttribute('aria-pressed',String(S.sim)); $('#btnSim').textContent=S.sim?'Detener prueba':'Probar encendido';
   $('#chkTraces').checked=S.traces;
   const hints={select:'Arrastra componentes para moverlos. Supr borra el seleccionado.',led:'Toca el dibujo para poner un LED. Si tocas un ojo u otro punto pequeño, el LED se centra solo.',rgb:'Toca el dibujo para poner LEDs de colores. Se encadenan en orden alrededor del centro.',termo:'Toca una forma del dibujo para volverla zona termocrómica. Su calefactor va justo detrás.',touch:'Toca donde quieras el sensor: es un círculo de cobre que reacciona al dedo.',button:'El botón va en el reverso; tócalo donde quieras que quede.'};
-  $('#hint').textContent=(S.view==='back'?'Vista del reverso: aquí van batería, chip y calefactores. ':S.view==='capas'?'Capas superpuestas: la línea amarilla es el contorno que se exporta. ':'')+hints[S.tool];
+  $('#hint').textContent=(S.view==='back'?'Vista del reverso: las piezas en gris son provisionales, KiCad decide su lugar final. Aquí van batería, chip y calefactores. ':S.view==='capas'?'Capas superpuestas: la línea amarilla es el contorno que se exporta. ':'')+hints[S.tool];
   renderSel(); renderSummary();
 }
 function optSelect(scope,k,obj,val,lbl){ return `<label class="field"><span>${lbl}</span><select data-scope="${scope}" data-k="${k}">${Object.entries(obj).map(([v,o])=>`<option value="${v}" ${v===val?'selected':''}>${typeof o==='string'?o:o.label}</option>`).join('')}</select></label>`; }
