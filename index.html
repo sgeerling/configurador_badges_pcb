@@ -412,6 +412,11 @@ const MCUS={
   rp2040:{label:'RP2040',short:'RP2040',lcsc:'C2040',pkg:'QFN-56',pins:26,vmin:3.3,vmax:3.3,extras:['regulador 3,3 V','flash 2 MB','cristal 12 MHz'],prog:'USB',w:7,h:7,fp:'Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm',mA:20,manualOnly:true}
 };
 const MCU_AUTO=['ninguno','attiny10','attiny202','ch32v003j4','attiny412','ch32v003f4','attiny1616'];
+function fitsSilhouette(B){ if(!GEO.poly) return true; const key=traceKey+'|'+(B.d||B.w+'x'+B.h); GEO.fitCache=GEO.fitCache||{}; if(key in GEO.fitCache) return GEO.fitCache[key];
+  const shapes=[]; if(B.d){ const r=B.d/2+1; shapes.push(Array.from({length:16},(_,k)=>[r*Math.cos(k*Math.PI/8),r*Math.sin(k*Math.PI/8)])); }
+  else [[B.w/2+1,B.h/2+1],[B.h/2+1,B.w/2+1]].forEach(([a,b])=>{ const pts=[]; const nx=Math.max(2,Math.ceil(a)),ny=Math.max(2,Math.ceil(b)); for(let i=0;i<=nx;i++){const x=-a+2*a*i/nx; pts.push([x,-b],[x,b]);} for(let i=1;i<ny;i++){const y=-b+2*b*i/ny; pts.push([-a,y],[a,y]);} shapes.push(pts); });
+  let ok=false; for(const sh of shapes){ for(let y=0;y<=GEO.H&&!ok;y+=0.75) for(let x=0;x<=GEO.W&&!ok;x+=0.75){ if(!insideBoard(x,y)) continue; if(sh.every(([dx,dy])=>insideBoard(x+dx,y+dy))) ok=true; } if(ok) break; }
+  GEO.fitCache[key]=ok; return ok; }
 function pinsNeeded(comps){ let n=0; comps.forEach(c=>{ if(c.kind==='led'&&c.beh!=='fijo') n++; if(c.kind==='touch'||c.kind==='termo') n++; if(c.kind==='button'&&c.action==='modo') n++; }); if(comps.some(c=>c.kind==='rgb')) n++; return n; }
 function mcuFits(m,B){ if(m.extras.includes('regulador 3,3 V')) return !!B.usb&&!B.supercap; return m.vmin<=B.vlo&&m.vmax>=B.vhi; }
 const MASKS={negro:'#141518',verde:'#1d5a39',morado:'#4a2a6a',azul:'#1c3d70',rojo:'#86201f',blanco:'#ecece6',amarillo:'#d2ab1c'};
@@ -685,6 +690,7 @@ function derive(){
   if(!comps.length) warns.push({lv:'info',t:'Aún no hay interacciones. Elige una en el paso 3 y toca el dibujo.'});
   if(comps.length&&B.d&&Math.min(W,H)<B.d+3) warns.push({lv:'crit',t:`La ${B.short} mide ${B.d} mm y no cabe en una placa de ${fmt(W)} × ${fmt(H)} mm. Agranda la pieza o cambia la energía.`});
   if(comps.length&&!B.d&&(Math.min(W,H)<Math.min(B.w,B.h)+3||Math.max(W,H)<Math.max(B.w,B.h)+3)) warns.push({lv:'crit',t:`La batería ${B.short} (${B.w}×${B.h} mm) no cabe en la placa.`});
+  else if(comps.length&&!fitsSilhouette(B)&&!warns.some(w=>/no cabe/.test(w.t))) warns.push({lv:'crit',t:`${B.d?'La '+B.short+' (Ø'+B.d+' mm)':'La '+B.short+' ('+B.w+'×'+B.h+' mm)'} no cabe dentro de la silueta del dibujo, aunque sí en su rectángulo. Agranda la pieza o elige una energía más chica.`});
   if(bat&&bpos.ov>1) warns.push({lv:'warn',t:'La batería queda en parte sobre el calefactor y recibiría calor. Agranda la pieza o achica la zona termocrómica.'});
   if(has('termo')&&!B.usb) warns.push({lv:'crit',t:'Una pila de botón no entrega la corriente para calentar. Usa una LiPo con USB-C (la opción automática ya lo hace).'});
   if(peak>B.maxmA) warns.push({lv:B.usb?'warn':'crit',t:`El pico de consumo (${fmt(peak,0)} mA) supera lo que entrega la ${B.short} (≈${B.maxmA} mA). ${!B.usb?'Reduce LEDs o usa LiPo.':bk==='lipo180'?'Achica la zona de calor o actívala por pulsos.':'Usa la LiPo de 180 mAh.'}`});
