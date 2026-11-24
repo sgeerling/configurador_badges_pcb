@@ -1064,7 +1064,9 @@ function makeJSON(){ const d=D; const comp=c=>{const o={ref:c.ref,tipo:c.kind,x_
     vias:d.vias.map(v=>({x_mm:r3(v.x),y_mm:r3(v.y),red:v.net})),revisiones:d.warns.map(w=>({nivel:w.lv,texto:w.t}))},null,2); }
 /* ---------- Pedido para KiCad (Copper) ---------- */
 function pedidoSlug(){ return (S.artName||'badge').replace(/\.[a-z0-9]+$/i,'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')||'badge'; }
-function pedidoBlockers(){ render(); return D.warns.filter(w=>w.lv==='crit').map(w=>w.t); }
+function pedidoBlockers(){ render(); const bl=D.warns.filter(w=>w.lv==='crit').map(w=>w.t);
+  if(S.outline==='silueta'&&!GEO.poly){ bl.push('La silueta de la placa aún se está calculando: espera un segundo.'); clearTimeout(pedidoBlockers.t); pedidoBlockers.t=setTimeout(()=>{ if(!$('#modal').hidden&&curExp==='pedido') renderModal(); },500); }
+  return bl; }
 const PED_SLOT={'cu-top':'F.Cu','sm-top':'F.Mask','ss-top':'F.SilkS','sp-top':'F.Paste','cu-bottom':'B.Cu','sm-bottom':'B.Mask','ss-bottom':'B.SilkS','sp-bottom':'B.Paste'};
 const PED_ROL={bat:'bateria',mcu:'mcu',usb:'usb_c',ic:'cargador',q:'calefactor',rh:'calefactor',res:'resistencia',sao:'conector_sao',post:'poste_broche',mag:'iman'};
 function makePedido(){ render(); const d=D,B=d.B,M=d.M;
