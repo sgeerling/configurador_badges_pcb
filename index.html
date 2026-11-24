@@ -1062,6 +1062,48 @@ function makeJSON(){ const d=D; const comp=c=>{const o={ref:c.ref,tipo:c.kind,x_
     agujeros:d.holes.map(h=>({x_mm:r3(h.x),y_mm:r3(h.y),diametro_mm:h.d})),contorno_mm:outlinePts(),
     pistas:[...d.tracksF.map(t=>({capa:'F.Cu',red:t.net,ancho_mm:t.w,puntos:t.pts})),...d.tracksB.map(t=>({capa:'B.Cu',red:t.net,ancho_mm:t.w,puntos:t.pts}))],
     vias:d.vias.map(v=>({x_mm:r3(v.x),y_mm:r3(v.y),red:v.net})),revisiones:d.warns.map(w=>({nivel:w.lv,texto:w.t}))},null,2); }
+/* ---------- Pedido para KiCad (Copper) ---------- */
+function pedidoSlug(){ return (S.artName||'badge').replace(/\.[a-z0-9]+$/i,'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')||'badge'; }
+function pedidoBlockers(){ render(); return D.warns.filter(w=>w.lv==='crit').map(w=>w.t); }
+const PED_SLOT={'cu-top':'F.Cu','sm-top':'F.Mask','ss-top':'F.SilkS','sp-top':'F.Paste','cu-bottom':'B.Cu','sm-bottom':'B.Mask','ss-bottom':'B.SilkS','sp-bottom':'B.Paste'};
+const PED_ROL={bat:'bateria',mcu:'mcu',usb:'usb_c',ic:'cargador',q:'calefactor',rh:'calefactor',res:'resistencia',sao:'conector_sao',post:'poste_broche',mag:'iman'};
+function makePedido(){ render(); const d=D,B=d.B,M=d.M;
+  setLayerVis('all'); const geo=artGeometry(); setLayerVis(S.view);
+  const P=c=>c.map(q=>[r3(q[0]),r3(q[1])]);
+  const tone=l=>l<0.33?'oscuro':l<0.7?'medio':'claro', capaTono={claro:'F.SilkS',medio:'F.Cu+F.Mask',oscuro:'borra'};
+  const arte=[]; geo.forEach((a,i)=>{ const e=a.e; let capa=null,t=null;
+    if(ART.mode==='layers'){ capa=PED_SLOT[e.slot]; t='capa'; if(!capa) return; }
+    const regs=a.contours.filter((c,k)=>!a.holes.has(k)&&c.length>2).map(P), hol=a.contours.filter((c,k)=>a.holes.has(k)).map(P);
+    if(e.fill!=='none'&&regs.length){ const tt=t||tone(e.lf); arte.push({capa:capa||capaTono[tt],tono:tt,orden:i,poligonos_mm:regs,huecos_mm:hol,trazos_mm:[]}); }
+    if(e.stroke!=='none'&&a.swMM>=0.06){ const tt=t||tone(e.ls); arte.push({capa:capa||capaTono[tt],tono:tt,orden:i,poligonos_mm:[],huecos_mm:[],trazos_mm:a.contours.filter(c=>c.length>1).map(c=>({puntos:P(c),ancho_mm:r3(a.swMM),cerrado:!!a.closed}))}); } });
+  const circle=(x,y,r)=>Array.from({length:24},(_,k)=>[r3(x+r*Math.cos(k*Math.PI/12)),r3(y+r*Math.sin(k*Math.PI/12))]);
+  const fixed=d.comps.map(c=>{ const o={ref:c.ref,rol:c.kind,lcsc:null,valor:'',x_mm:r3(c.x),y_mm:r3(c.y),rot_deg:0,cara:c.kind==='button'?'B':'F',funcion:{}};
+    if(c.kind==='led'){ o.valor=`${LED_PKGS[c.pkg].label} ${LED_COLORS[c.color].label.toLowerCase()}`; if(c.pkg==='s1206'&&c.color==='rojo') o.lcsc='C2827254'; o.funcion={control:c.beh==='fijo'?'fijo':'mcu',comportamiento:c.beh,color:c.color,corriente_ma:LED_PKGS[c.pkg].mA,resistencia_ohm:c.R}; }
+    if(c.kind==='rgb'){ o.valor='LED RGB WS2812B-2020'; o.funcion={control:'mcu',efecto:c.beh}; }
+    if(c.kind==='touch'){ o.valor='Pad de toque Ø4 mm (cobre)'; o.funcion={control:'mcu'}; }
+    if(c.kind==='button'){ o.valor='Pulsador SMD PTS810'; o.funcion={control:c.action==='modo'?'mcu':'energia',accion:c.action}; }
+    if(c.kind==='termo'){ o.valor='Zona termocrómica · '+PIGMENTS[c.pigment].label; o.funcion={control:'mcu',pigmento:c.pigment,activacion:c.act,calefactor:c.heater,n_resistencias:c.nH||0,resistencia_ohm:r3(c.Rh||0),potencia_w:r3(c.heatP||0),corriente_ma:Math.round(c.heatI||0)};
+      const a=c.el!=null?geo.find(x=>x.e.i===c.el):null; const outer=a?a.contours.filter((ct,k)=>!a.holes.has(k)&&ct.length>2).sort((u,v)=>Math.abs(polyArea(v))-Math.abs(polyArea(u)))[0]:null;
+      o.zona_mm=outer?P(outer):circle(c.x,c.y,5); }
+    return o; });
+  const free=d.parts.map(p=>({rol:PED_ROL[p.kind]||p.kind,lcsc:p.kind==='bat'?(B.lcsc||null):(p.lcsc||null),valor:p.val||'',nota:p.note||'',ref_provisional:p.ref}));
+  if(d.needMCU) free.push({rol:'programacion',lcsc:null,valor:'Pads de programación '+M.prog,nota:'',ref_provisional:'TPprog'});
+  const sen=[]; let rgbDone=false;
+  d.comps.forEach(c=>{ if(c.kind==='led'&&c.beh!=='fijo') sen.push({nombre:c.ref+'_CTRL',desde:'MCU',hacia:c.ref,tipo:'salida'});
+    if(c.kind==='rgb'&&!rgbDone){ rgbDone=true; sen.push({nombre:'RGB_DIN',desde:'MCU',hacia:c.ref,tipo:'datos_rgb'}); }
+    if(c.kind==='touch') sen.push({nombre:'TOUCH_'+c.ref,desde:'MCU',hacia:c.ref,tipo:'entrada_tactil'});
+    if(c.kind==='button'&&c.action==='modo') sen.push({nombre:'BTN_'+c.ref,desde:'MCU',hacia:c.ref,tipo:'boton'});
+    if(c.kind==='termo') sen.push({nombre:'HEAT_'+c.ref,desde:'MCU',hacia:c.ref,tipo:'pwm_calefactor'}); });
+  const out={tipo:'pedido_badge',version:2,generado:new Date().toISOString(),
+    pieza:{tipo:S.product,cantidad:S.product==='aro'?2:1,ancho_mm:r3(d.W),alto_mm:r3(d.H),grosor_mm:d.P.thick,sujecion:d.mount.label,nombre:S.artName||'badge'},
+    fabricacion:S.fab==='fab'?{metodo:'pcb_fabrica',mascara:S.mask,acabado:'ENIG'}:{metodo:'fresado_makera_z1'},
+    contorno_mm:P(outlinePts()),agujeros:d.holes.map(h=>({x_mm:r3(h.x),y_mm:r3(h.y),diametro_mm:h.d,uso:d.mount.id})),arte,
+    control:{mcu:d.mcuId,lcsc:M?M.lcsc:null,elegido:d.mcuAuto?'auto':'manual',patas_usadas:d.pinsReq,programacion:d.needMCU?M.prog:null},
+    energia:{tipo:d.bk,lcsc:B.lcsc||null,usb_c:!!B.usb,interruptor:!!B.usb||d.comps.some(c=>c.kind==='button'&&c.action==='onoff'),autonomia_min:d.minutes!=null?r3(d.minutes):(d.hours===Infinity?null:r3(d.hours*60))},
+    piezas_fijas:fixed,piezas_libres:free,senales:sen,reglas:{fab:'jlcpcb',pista_min_mm:d.tw.sig,separacion_mm:0.2},
+    revisiones:d.warns.map(w=>({nivel:w.lv,texto:w.t}))};
+  return JSON.stringify(out,null,2); }
+function saveBlob(name,text){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500); }
 function makeBOM(){ const rows=bomRows(D); const q=s=>'"'+String(s||'').replace(/"/g,'""')+'"'; return ['Referencias,Pieza,Huella KiCad,Lado,Cantidad,Nota',...rows.map(r=>[q(r.refs),q(r.val),q(r.fp),q(r.side),r.qty,q(r.note)].join(','))].join('\n'); }
 function makeKicad(){ const d=D,P=outlinePts(); const X=x=>r3(x+OX),Y=y=>r3(y+OY); const L=[];
   L.push(`# Generado por el Configurador de badges, pins y aros (${new Date().toLocaleDateString('es-CL')})`,
@@ -1135,6 +1177,7 @@ const EXPORTS={
   outline:{label:'Contorno SVG',file:'contorno.svg',make:makeOutlineSVG,guide:'El mismo contorno en SVG a escala real (mm). Útil para Makera Studio, para la cortadora láser o para EasyEDA (Colocar SVG).'},
   art:{label:'Arte por capa',file:'arte.svg',make:makeArt,guide:'Cada capa del dibujo por separado, a escala y alineada con el contorno. En KiCad: Archivo › Importar › Gráficos, una vez por capa. En la Z1 sirve como trayectoria de grabado.'},
   json:{label:'Proyecto JSON',file:'proyecto_badge.json',make:makeJSON,guide:'La ficha completa del diseño: posiciones, valores, energía y revisiones. Es lo que leería un agente de producción para cotizar, comprar componentes y preparar la máquina.'},
+  pedido:{label:'Pedido para KiCad',get file(){return 'pedido_'+pedidoSlug()+'.json';},make:makePedido,guide:'Tus piezas visibles con su posición fija, la lista de piezas técnicas que KiCad ubicará, el circuito, el contorno y el arte. Descárgalo y pídele a Claude: «Genera en KiCad el pedido adjunto». Claude lo arma con Copper (esquemático, PCB, ERC/DRC y archivos para JLCPCB).'},
   bom:{label:'Materiales CSV',file:'materiales.csv',make:makeBOM,guide:'Lista de compra con referencias y huellas de KiCad. Ábrela en una planilla o súbela a tu proveedor de componentes.'}
 };
 let curExp='gerber', DL=null;
@@ -1147,6 +1190,9 @@ function renderModal(){ const x=EXPORTS[curExp];
   const fab=S.fab==='fab'; if(curExp==='gerber'){ const g=generateGerbers(); $('#mExtra').innerHTML=`<label class="field" style="min-width:260px"><span>Archivo</span><select id="gbSel">${g.files.map((f,i)=>`<option value="${i}" ${i===gbSel?'selected':''}>${f.filename}</option>`).join('')}</select></label>`; $('#mFile').textContent=g.files[clamp(gbSel,0,g.files.length-1)].filename; $('#mText').value=makeGerberTab(); $('#mSave').hidden=true; return; }
   $('#mExtra').innerHTML=curExp==='art'?`<label class="field" style="min-width:240px"><span>Capa</span><select id="artSel">${(fab?[['silk','Serigrafía (tonos claros)'],['cobre','Cobre expuesto dorado (tonos medios)'],['mascara','Máscara (tonos oscuros)']]:[['brillante','Cobre brillante (claros)'],['patina','Pátina con láser (medios)'],['fresado','Fresado hasta la fibra (oscuros)']]).map(([v,l])=>`<option value="${v}" ${v===artLayerSel?'selected':''}>${l}</option>`).join('')}</select></label>`:'';
   const file=curExp==='art'?`arte_${artLayerSel}.svg`:x.file; $('#mFile').textContent=file;
+  $('#mCopy').hidden=false; $('#mText').hidden=false;
+  if(curExp==='pedido'){ const bl=pedidoBlockers(); if(bl.length){ $('#mExtra').innerHTML='<div class="note"><b>No se puede generar el pedido todavía:</b><ul>'+bl.map(b=>'<li>'+esc(b)+'</li>').join('')+'</ul></div>'; $('#mText').value=''; $('#mText').hidden=true; $('#mSave').hidden=true; $('#mCopy').hidden=true; return; }
+    $('#mText').value=x.make(); $('#mSave').hidden=false; return; }
   $('#mText').value=x.make(); $('#mSave').hidden=!DL||!SAVE_OK.test(file); }
 $('#btnExport').addEventListener('click',openModal);
 $('#btnUndo').addEventListener('click',histUndo);
@@ -1157,7 +1203,9 @@ $('#modal').addEventListener('change',e=>{ if(e.target.id==='artSel'){artLayerSe
 $('#mZip').addEventListener('click',saveZip);
 $('#mView').addEventListener('click',()=>{ closeModal(); showApp('gerber'); });
 $('#mCopy').addEventListener('click',async()=>{ try{ await navigator.clipboard.writeText($('#mText').value); toast('Copiado. Pégalo en un archivo llamado '+$('#mFile').textContent); }catch(e){ $('#mText').select(); toast('Selecciona el texto y cópialo con Ctrl+C / Cmd+C.'); } });
-$('#mSave').addEventListener('click',async()=>{ if(!DL) return; try{ await DL.save({filename:$('#mFile').textContent,data:$('#mText').value}); }catch(e){ toast('La descarga no se completó. Puedes copiar el contenido.'); } });
+$('#mSave').addEventListener('click',async()=>{ const fn=$('#mFile').textContent, data=$('#mText').value;
+  try{ if(DL) await DL.save({filename:fn,data}); else saveBlob(fn,data); }catch(e){ toast('La descarga no se completó. Puedes copiar el contenido.'); return; }
+  if(curExp==='pedido'){ try{ await navigator.clipboard.writeText(`Genera en KiCad el pedido adjunto (${fn})`); toast('Pedido descargado. Copié el mensaje para Claude: pégalo en el chat junto al archivo.'); }catch(e){ toast(`Pedido descargado. En el chat escribe: «Genera en KiCad el pedido adjunto (${fn})».`); } } });
 try{ if(window.claude&&typeof window.claude.use==='function') window.claude.use('downloads').then(d=>{DL=d; if(!$('#modal').hidden) renderModal();}).catch(()=>{}); }catch(e){}
 
 
