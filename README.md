@@ -37,6 +37,21 @@ El botón de descarga directa funciona dentro de claude.ai. Fuera de ahí, usa l
 
 Si faltan huellas, edita la línea `FP_DIR = ...` con la carpeta de huellas de tu instalación.
 
+## Novedades v2
+
+- **Deshacer y rehacer** (botones ↶ ↷, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z) para cualquier cambio: piezas, opciones, forma, color y el dibujo cargado. Hasta 100 pasos.
+- **Control**: elige el microcontrolador o deja *Automático* (el más barato que alcance): ATtiny10, ATtiny202, ATtiny412, CH32V003J4, CH32V003F4, ATtiny1616; a mano también ESP32-C3 (WiFi/BT) y RP2040. Avisa si faltan patas o el voltaje no calza.
+- **Supercondensadores** como fuente: 1 F 5,5 V (moneda) y 15 F 2,7 V (cilindro), con autonomía en minutos y avisos.
+- **Piezas visibles fijas, piezas técnicas libres**: LEDs, luces, zonas termocrómicas, toque y botón los ubicas tú; la energía y el control aparecen en gris como provisionales y los ubica KiCad.
+- **Pedido para KiCad** (`pedido_<nombre>.json`, esquema en `docs/pedido_badge.schema.json`): en *Exportar › Pedido para KiCad* descárgalo y en Claude escribe «Genera en KiCad el pedido adjunto». La skill `pedido-badge-kicad` (copia en `docs/skill-pedido-badge-kicad/`) lo arma con Copper: esquemático, PCB con tus piezas bloqueadas, ruteo, GND, arte, ERC/DRC y paquete JLCPCB. Ejemplo: `ejemplos/pedido_buho.json`.
+
+## Pruebas
+
+```bash
+npm install
+npm test   # Playwright + Chrome del sistema; las librerías CDN se sirven desde node_modules
+```
+
 ## Ejemplos
 
 - `ejemplos/gerber-buho/`: Gerber del búho de ejemplo, generados por el configurador.
