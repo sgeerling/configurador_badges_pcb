@@ -1,0 +1,11 @@
+{
+  "name": "configurador-badges-pcb",
+  "private": true,
+  "scripts": { "test": "node tests/run-all.cjs" },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "gerber-to-svg": "4.2.8",
+    "jszip": "3.10.1",
+    "pcb-stackup": "4.2.8"
+  }
+}
