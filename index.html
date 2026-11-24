@@ -260,6 +260,7 @@ td .mono{font-size:11.5px;color:var(--muted)}
       </div>
       <div id="maskRow" class="swatches"></div>
       <label class="field" for="selBatt"><span>Energía</span><select id="selBatt"></select></label>
+      <label class="field" for="selMcu"><span>Control</span><select id="selMcu"></select></label>
     </section>
   </aside>
 
@@ -391,11 +392,25 @@ const PIGMENTS={
 const ACT_TERMO={tacto:'Al tocar el sensor',ciclo:'Ciclo automático (4 s / 4 s)',boton:'Con el botón'};
 const HEATERS={smd:'Resistencias SMD bajo la zona',serp:'Serpentín de cobre (experimental)'};
 const BATT={
-  cr2032:{label:'Pila CR2032',short:'CR2032',d:20,fp:'Battery:BatteryHolder_Keystone_3034_1x20mm',mAh:220,v:3.0,g:3.9,maxmA:15},
-  cr1220:{label:'Pila CR1220',short:'CR1220',d:12.5,fp:'Battery:BatteryHolder_Keystone_3001_1x12mm',mAh:38,v:3.0,g:1.4,maxmA:5},
-  lipo70:{label:'LiPo 301020 · 70 mAh + USB-C',short:'LiPo 70 mAh',w:10,h:20,fp:'Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal',mAh:70,v:3.7,g:2.0,maxmA:70,usb:true},
-  lipo180:{label:'LiPo 402030 · 180 mAh + USB-C',short:'LiPo 180 mAh',w:20,h:30,fp:'Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal',mAh:180,v:3.7,g:4.2,maxmA:180,usb:true}
+  cr2032:{label:'Pila CR2032',short:'CR2032',vlo:2.0,vhi:3.0,d:20,fp:'Battery:BatteryHolder_Keystone_3034_1x20mm',mAh:220,v:3.0,g:3.9,maxmA:15},
+  cr1220:{label:'Pila CR1220',short:'CR1220',vlo:2.0,vhi:3.0,d:12.5,fp:'Battery:BatteryHolder_Keystone_3001_1x12mm',mAh:38,v:3.0,g:1.4,maxmA:5},
+  lipo70:{label:'LiPo 301020 · 70 mAh + USB-C',short:'LiPo 70 mAh',vlo:3.0,vhi:4.2,w:10,h:20,fp:'Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal',mAh:70,v:3.7,g:2.0,maxmA:70,usb:true},
+  lipo180:{label:'LiPo 402030 · 180 mAh + USB-C',short:'LiPo 180 mAh',vlo:3.0,vhi:4.2,w:20,h:30,fp:'Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal',mAh:180,v:3.7,g:4.2,maxmA:180,usb:true}
 };
+const MCUS={
+  ninguno:{label:'Sin microcontrolador',short:'Ninguno',lcsc:null,pkg:'',pins:0,vmin:0,vmax:99,extras:[],prog:null,w:0,h:0,fp:'',mA:0},
+  attiny10:{label:'ATtiny10',short:'ATtiny10',lcsc:'C128438',pkg:'SOT-23-6',pins:3,vmin:1.8,vmax:5.5,extras:[],prog:'TPI',w:3,h:3,fp:'Package_TO_SOT_SMD:SOT-23-6',mA:1},
+  attiny202:{label:'ATtiny202',short:'ATtiny202',lcsc:'C2052951',pkg:'SOIC-8',pins:5,vmin:1.8,vmax:5.5,extras:[],prog:'UPDI',w:4.9,h:3.9,fp:'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm',mA:1},
+  attiny412:{label:'ATtiny412',short:'ATtiny412',lcsc:'C1337190',pkg:'SOIC-8',pins:5,vmin:1.8,vmax:5.5,extras:[],prog:'UPDI',w:4.9,h:3.9,fp:'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm',mA:1},
+  ch32v003j4:{label:'CH32V003J4M6',short:'CH32V003J4',lcsc:'C5346354',pkg:'SOP-8',pins:5,vmin:2.7,vmax:5.5,extras:[],prog:'SWIO',w:4.9,h:3.9,fp:'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm',mA:2},
+  ch32v003f4:{label:'CH32V003F4P6',short:'CH32V003F4',lcsc:'C5187096',pkg:'TSSOP-20',pins:16,vmin:2.7,vmax:5.5,extras:[],prog:'SWIO',w:6.5,h:4.4,fp:'Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm',mA:2},
+  attiny1616:{label:'ATtiny1616',short:'ATtiny1616',lcsc:'C507118',pkg:'QFN-20',pins:17,vmin:1.8,vmax:5.5,extras:[],prog:'UPDI',w:3,h:3,fp:'Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm',mA:1},
+  esp32c3:{label:'ESP32-C3-MINI-1 (WiFi/Bluetooth)',short:'ESP32-C3',lcsc:'C2838502',pkg:'Módulo 13,2×16,6',pins:13,vmin:3.0,vmax:3.6,extras:['regulador 3,3 V'],prog:'USB',w:13.2,h:16.6,fp:'RF_Module:ESP32-C3-MINI-1',mA:25,manualOnly:true},
+  rp2040:{label:'RP2040',short:'RP2040',lcsc:'C2040',pkg:'QFN-56',pins:26,vmin:3.3,vmax:3.3,extras:['regulador 3,3 V','flash 2 MB','cristal 12 MHz'],prog:'USB',w:7,h:7,fp:'Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm',mA:20,manualOnly:true}
+};
+const MCU_AUTO=['ninguno','attiny10','attiny202','ch32v003j4','attiny412','ch32v003f4','attiny1616'];
+function pinsNeeded(comps){ let n=0; comps.forEach(c=>{ if(c.kind==='led'&&c.beh!=='fijo') n++; if(c.kind==='touch'||c.kind==='termo') n++; if(c.kind==='button'&&c.action==='modo') n++; }); if(comps.some(c=>c.kind==='rgb')) n++; return n; }
+function mcuFits(m,B){ if(m.extras.includes('regulador 3,3 V')) return !!B.usb&&!B.supercap; return m.vmin<=B.vlo&&m.vmax>=B.vhi; }
 const MASKS={negro:'#141518',verde:'#1d5a39',morado:'#4a2a6a',azul:'#1c3d70',rojo:'#86201f',blanco:'#ecece6',amarillo:'#d2ab1c'};
 const MASK_LBL={negro:'Negra',verde:'Verde',morado:'Morada',azul:'Azul',rojo:'Roja',blanco:'Blanca',amarillo:'Amarilla'};
 const GOLD='#d7b057';
@@ -425,7 +440,7 @@ const OWL=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 232">
 /* ---------- Estado ---------- */
 const S={product:'badge',size:80,mount:0,outline:'silueta',margin:2.5,fab:'fab',mask:'negro',battery:'auto',view:'front',look:'pcb',traces:true,
   tool:'select',opt:{pkg:'s1206',color:'rojo',beh:'respiracion',rgbBeh:'arcoiris',pigment:'azul-rosa',act:'tacto',heater:'smd',action:'modo'},
-  comps:[],sel:null,sim:false,artName:'',layerFiles:[]};
+  comps:[],sel:null,sim:false,artName:'',layerFiles:[],mcu:'auto'};
 const ART={id:0,vb:null,els:[],mode:'single',board:null,boardBox:null};
 const GEO={W:60,H:60,s:1,ox:0,oy:0,poly:null,polyArea:0,centroid:null,silNode:null,islands:false,polyNote:''};
 let UID=1, D=null;
@@ -585,7 +600,7 @@ function derive(){
   let nD=0,nTP=0,nSW=0,nTH=0;
   comps.forEach(c=>{ if(c.kind==='led'||c.kind==='rgb') c.ref='D'+(++nD); if(c.kind==='touch') c.ref='TP'+(++nTP); if(c.kind==='button') c.ref='SW'+(++nSW); if(c.kind==='termo') c.ref='Z'+(++nTH); });
   const has=k=>comps.some(c=>c.kind===k);
-  const needMCU=comps.some(c=>['rgb','touch','termo'].includes(c.kind)||(c.kind==='led'&&c.beh!=='fijo')||(c.kind==='button'&&c.action==='modo'));
+  const pinsReq=pinsNeeded(comps);
   let heatPeak=0; let rh=0;
   comps.filter(c=>c.kind==='termo').forEach(c=>{ c.zone=zoneRect(c); const aCm2=c.zone.w*c.zone.h/100;
     if(c.heater==='smd'){ c.nH=clamp(Math.round(aCm2*1.5),1,6); const Pt=clamp(aCm2*0.15,0.15,0.55); c.Rh=e24(c.nH*3.7*3.7/Pt); c.heatP=c.nH*3.7*3.7/c.Rh; c.heatI=c.heatP/3.7*1000;
@@ -595,8 +610,11 @@ function derive(){
   let bk=S.battery; const auto=bk==='auto';
   if(auto){ if(has('termo')) bk=heatPeak>55?'lipo180':'lipo70'; else bk=(S.product==='badge'&&Math.min(W,H)>=26)?'cr2032':'cr1220'; }
   const B=BATT[bk],Vb=B.v;
+  let mcuId=S.mcu||'auto'; const mcuAuto=mcuId==='auto';
+  if(mcuAuto) mcuId=pinsReq?(MCU_AUTO.find(id=>id!=='ninguno'&&MCUS[id].pins>=pinsReq&&mcuFits(MCUS[id],B))||null):'ninguno';
+  const M=mcuId?MCUS[mcuId]:null; const needMCU=!!M&&mcuId!=='ninguno';
   const F={fijo:1,parpadeo:0.5,respiracion:0.45,tacto:0.15,arcoiris:0.8};
-  let avg=needMCU?0.8:0,peak=needMCU?2:0;
+  let avg=needMCU?M.mA*0.4:0,peak=needMCU?M.mA:0;
   comps.forEach(c=>{
     if(c.kind==='led'){const I=LED_PKGS[c.pkg].mA; avg+=I*F[c.beh]; peak+=I; c.R=e24((Vb-LED_COLORS[c.color].vf)/(I/1000)); if((Vb-LED_COLORS[c.color].vf)<0.15) c.R=0;}
     if(c.kind==='rgb'){avg+=1+4*F[c.beh]; peak+=13;}
@@ -619,7 +637,7 @@ function derive(){
   const batPlus={x:bat.x+bw*0.55,y:bat.y};
   let mcu=null;
   if(needMCU){ const bx0=bat.x,by0=bat.y; let p={x:bx0,y:by0-bh-4}; if(!insideBoard(p.x,p.y)) p={x:bx0+bw+5,y:by0}; if(!insideBoard(p.x,p.y)) p={x:bx0-bw-5,y:by0}; if(!insideBoard(p.x,p.y)) p={x:bx0,y:by0+bh+4};
-    mcu={ref:'U1',kind:'mcu',x:p.x,y:p.y,w:4.9,h:3.9,fp:'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm',val:'CH32V003J4M6',side:'B'}; parts.push(mcu);
+    mcu={ref:'U1',kind:'mcu',x:p.x,y:p.y,w:M.w,h:M.h,fp:M.fp,val:M.label,lcsc:M.lcsc,side:'B'}; parts.push(mcu);
     const t=curve(batPlus,mcu,0.15); tracksB.push({net:'VBAT',w:tw.pwr,...t}); }
   const hub=mcu?{x:mcu.x,y:mcu.y}:batPlus;
   if(B.usb){ const bx=ctr.x,by=bottomY(bx)-4.6; parts.push({ref:'J1',kind:'usb',x:bx,y:by,w:9,h:7.3,fp:'Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal',val:'USB-C 5 V',side:'B'});
@@ -680,7 +698,13 @@ function derive(){
   if(GEO.islands) warns.push({lv:'warn',t:'El dibujo tiene partes separadas y la placa sigue solo la silueta principal. Sube el margen para unirlas.'});
   if(GEO.polyNote) warns.push({lv:'warn',t:GEO.polyNote});
   if(!warns.some(w=>w.lv!=='info')&&comps.length) warns.unshift({lv:'ok',t:'Sin problemas de energía ni de tamaño.'});
-  return {W,H,fab,P,mount,tw,comps,needMCU,B,bk,auto,avg,peak,hours,parts,tracksF,tracksB,vias,holes,weight,warns,ctr,heatPeak,hub,batPlus};
+  if(comps.length){
+    if(mcuAuto&&!M) warns.push({lv:'crit',t:`Ningún microcontrolador de la lista sirve para ${pinsReq} patas con ${B.short}. Reduce interacciones o elige otra energía.`});
+    if(M&&M.pins<pinsReq) warns.push({lv:'crit',t:`${mcuId==='ninguno'?'Sin microcontrolador no hay patas':'El '+M.short+' tiene '+M.pins+' patas libres'} y el diseño necesita ${pinsReq}. Elige uno más grande o deja Automático.`});
+    if(M&&needMCU&&M.extras.includes('regulador 3,3 V')&&(!B.usb||B.supercap)) warns.push({lv:'crit',t:`El ${M.short} necesita una LiPo con USB-C (usa regulador de 3,3 V y consume ${M.mA} mA).`});
+    else if(M&&needMCU&&!mcuFits(M,B)) warns.push({lv:'crit',t:`El ${M.short} funciona entre ${fmt(M.vmin,1)} y ${fmt(M.vmax,1)} V, pero la ${B.short} entrega entre ${fmt(B.vlo,1)} y ${fmt(B.vhi,1)} V.`});
+  }
+  return {mcuId:mcuId||'ninguno',mcuAuto,pinsReq,M,W,H,fab,P,mount,tw,comps,needMCU,B,bk,auto,avg,peak,hours,parts,tracksF,tracksB,vias,holes,weight,warns,ctr,heatPeak,hub,batPlus};
 }
 
 /* ---------- Dibujo ---------- */
@@ -740,7 +764,7 @@ function drawBack(Dv){
   Dv.parts.forEach(p=>{
     if(p.kind==='bat'){ if(p.r){ el('rect',{x:p.x-p.r-1.6,y:p.y-2,width:2*p.r+3.2,height:4,rx:0.5,fill:'#9aa1a8'},g); el('circle',{cx:p.x,cy:p.y,r:p.r,fill:'#c3c9cf',stroke:'#7e868e','stroke-width':0.3},g); el('circle',{cx:p.x,cy:p.y,r:p.r*0.78,fill:'#dde1e4'},g); label(g,p.x,p.y+0.5,p.val+' +',Math.max(1.4,p.r*0.22)); }
       else { el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:1.2,fill:'#c9cdd1',stroke:'#7e868e','stroke-width':0.3},g); label(g,p.x,p.y,'LiPo',Math.min(2,p.w*0.22)); } }
-    if(p.kind==='mcu'){ for(let k=0;k<4;k++){ el('rect',{x:p.x-3.3,y:p.y-1.9+k*1.27-0.3,width:1,height:0.6,fill:PAD},g); el('rect',{x:p.x+2.3,y:p.y-1.9+k*1.27-0.3,width:1,height:0.6,fill:PAD},g);} el('rect',{x:p.x-2.45,y:p.y-2.45,width:4.9,height:4.9,rx:0.3,fill:'#202326'},g); label(g,p.x,p.y+0.4,'U1',1.2); }
+    if(p.kind==='mcu'){ const w=p.w||4.9,h=p.h||3.9,n=Math.max(2,Math.round(h/1.27)); for(let k=0;k<n;k++){ const yy=p.y-h/2+(k+0.5)*h/n-0.3; el('rect',{x:p.x-w/2-0.9,y:yy,width:1,height:0.6,fill:PAD},g); el('rect',{x:p.x+w/2-0.1,y:yy,width:1,height:0.6,fill:PAD},g);} el('rect',{x:p.x-w/2,y:p.y-h/2,width:w,height:h,rx:0.3,fill:'#202326'},g); label(g,p.x,p.y+0.4,'U1',Math.min(1.2,w*0.25)); }
     if(p.kind==='usb'){ el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:0.8,fill:'#b7bdc3',stroke:'#7e868e','stroke-width':0.3},g); el('rect',{x:p.x-3,y:p.y+p.h/2-1.4,width:6,height:1.2,rx:0.6,fill:'#2a2d30'},g); label(g,p.x,p.y,'USB-C',1.3); }
     if(p.kind==='ic'||p.kind==='q'){ el('rect',{x:p.x-p.w/2,y:p.y-p.h/2,width:p.w,height:p.h,rx:0.15,fill:'#202326'},g); el('rect',{x:p.x-p.w/2+0.2,y:p.y+p.h/2,width:0.5,height:0.5,fill:PAD},g); el('rect',{x:p.x+p.w/2-0.7,y:p.y+p.h/2,width:0.5,height:0.5,fill:PAD},g); el('rect',{x:p.x-0.25,y:p.y-p.h/2-0.5,width:0.5,height:0.5,fill:PAD},g); }
     if(p.kind==='res'){ el('rect',{x:p.x-0.8,y:p.y-0.4,width:0.45,height:0.8,fill:PAD},g); el('rect',{x:p.x+0.35,y:p.y-0.4,width:0.45,height:0.8,fill:PAD},g); el('rect',{x:p.x-0.4,y:p.y-0.4,width:0.8,height:0.8,fill:'#1d1f22'},g); }
@@ -858,6 +882,7 @@ function renderPanels(){
   renderToolOpts(); renderSuggest();
   $('#maskRow').innerHTML=S.fab==='fab'?'<span class="lbl">Color de máscara</span>'+Object.keys(MASKS).map(k=>`<button class="chip" data-mask="${k}" aria-pressed="${k===S.mask}" title="Máscara ${MASK_LBL[k]}" aria-label="Máscara ${MASK_LBL[k]}" style="background:${MASKS[k]}"></button>`).join('')+'<p class="note">Acabado dorado (ENIG) en el cobre expuesto y serigrafía en los tonos claros del dibujo.</p>'
     :'<p class="note">Cobre desnudo pulido. Los tonos oscuros del dibujo se fresan hasta la fibra, los medios quedan como pátina grabada con el láser y los claros como cobre brillante.</p>';
+  $('#selMcu').innerHTML=`<option value="auto" ${S.mcu==='auto'?'selected':''}>Automático (ahora: ${D.M?D.M.short:'ninguno sirve'})</option>`+Object.entries(MCUS).map(([k,m])=>`<option value="${k}" ${S.mcu===k?'selected':''}>${m.label}${m.pins?' · '+m.pins+' patas':''}</option>`).join('');
   const sb=$('#selBatt'); sb.innerHTML=`<option value="auto" ${S.battery==='auto'?'selected':''}>Automática (ahora: ${BATT[D.bk].short})</option>`+Object.keys(BATT).map(k=>`<option value="${k}" ${S.battery===k?'selected':''}>${BATT[k].label}</option>`).join('');
   $('#btnSim').setAttribute('aria-pressed',String(S.sim)); $('#btnSim').textContent=S.sim?'Detener prueba':'Probar encendido';
   $('#chkTraces').checked=S.traces;
@@ -894,7 +919,7 @@ function renderSel(){ const p=$('#selPanel'); const c=S.comps.find(x=>x.id===S.s
 function renderSummary(){ const d=D;
   const hrs=d.hours===Infinity?'—':d.hours>=48?fmt(d.hours/24,0)+' días':fmt(d.hours,d.hours<10?1:0)+' h';
   $('#kpis').innerHTML=`<div class="kpi"><b>${hrs}</b><span>Autonomía de uso continuo</span></div><div class="kpi"><b>${fmt(d.weight)} g</b><span>Peso ${S.product==='aro'?'de cada aro':'aprox.'}</span></div><div class="kpi"><b>${d.comps.length}</b><span>Interacciones</span></div>`;
-  const facts=[['Placa',`${fmt(d.W)} × ${fmt(d.H)} × ${d.P.thick} mm`],['Fabricación',S.fab==='fab'?'PCB de fábrica, máscara '+MASK_LBL[S.mask].toLowerCase():'Fresado en Makera Z1'],['Energía',d.B.label+(d.auto?' · auto':'')],['Consumo medio / pico',`${fmt(d.avg,1)} / ${fmt(d.peak,0)} mA`],['Cerebro',d.needMCU?'CH32V003 (8 patas)':'No necesita'],['Pistas señal / potencia',`${d.tw.sig} / ${d.tw.pwr} mm`]];
+  const facts=[['Placa',`${fmt(d.W)} × ${fmt(d.H)} × ${d.P.thick} mm`],['Fabricación',S.fab==='fab'?'PCB de fábrica, máscara '+MASK_LBL[S.mask].toLowerCase():'Fresado en Makera Z1'],['Energía',d.B.label+(d.auto?' · auto':'')],['Consumo medio / pico',`${fmt(d.avg,1)} / ${fmt(d.peak,0)} mA`],['Cerebro',d.needMCU?`${d.M.short} (${d.pinsReq}/${d.M.pins} patas)`:'No necesita'],['Pistas señal / potencia',`${d.tw.sig} / ${d.tw.pwr} mm`]];
   if(S.product==='aro') facts.splice(1,0,['Cantidad','2 placas (par)']);
   $('#facts').innerHTML=facts.map(([a,b])=>`<li><span>${a}</span><span>${b}</span></li>`).join('');
   $('#warns').innerHTML=d.warns.map(w=>`<li class="${w.lv}"><b>${{crit:'Bloquea',warn:'Revisar',info:'Nota',ok:'Listo'}[w.lv]}:</b> ${w.t}</li>`).join('');
@@ -906,7 +931,7 @@ function bomRows(d){ const m=new Map(); const add=(ref,val,fp,side,note)=>{const
     if(c.kind==='touch') add(c.ref,'Pad de toque (cobre)','TestPoint:TestPoint_Pad_D4.0mm','F');
     if(c.kind==='button') add(c.ref,'Pulsador SMD','Button_Switch_SMD:SW_SPST_PTS810','B');
     if(c.kind==='termo') add(c.ref,'Pintura termocrómica '+PIGMENTS[c.pigment].label,'','F','Aplicar sobre el cobre de la zona'); });
-  d.parts.forEach(p=>{ if(p.kind==='bat'){ add(p.ref,'Portapilas / conector '+d.B.short,p.fp,'B'); add('—',d.B.usb?'Celda '+d.B.short:'Pila '+d.B.short,'','B','Batería'); } else add(p.ref,p.val,p.fp,'B',p.note); });
+  d.parts.forEach(p=>{ if(p.kind==='bat'){ add(p.ref,'Portapilas / conector '+d.B.short,p.fp,'B'); add('—',d.B.usb?'Celda '+d.B.short:'Pila '+d.B.short,'','B','Batería'); } else add(p.ref,p.val,p.fp,'B',[p.note,p.lcsc?'LCSC '+p.lcsc:''].filter(Boolean).join(' · ')); });
   const mt=d.mount; if(mt.id==='broche') add('—','Broche mariposa con poste','','B','Hardware'); if(mt.id==='gancho') add('—','Gancho de aro (plata 925 o acero)','','—','Hardware'); if(mt.id==='argolla') add('—','Argolla abierta 6 mm','','—','Hardware');
   const rows=[...m.values()].map(r=>({...r,refs:r.refs.length>3?r.refs[0]+'…'+r.refs[r.refs.length-1]:r.refs.join(', ')}));
   if(S.product==='aro') rows.forEach(r=>{r.qty*=2;}); return rows; }
@@ -955,6 +980,7 @@ $('#inMargin').addEventListener('input',e=>{HIST.hold=true; S.margin=+e.target.v
 $('#inMargin').addEventListener('change',()=>{HIST.hold=false; histCommit();});
 $('#selMount').addEventListener('change',e=>{S.mount=+e.target.value; render();});
 $('#selBatt').addEventListener('change',e=>{S.battery=e.target.value; render();});
+$('#selMcu').addEventListener('change',e=>{S.mcu=e.target.value; render();});
 $('#chkTraces').addEventListener('change',e=>{S.traces=e.target.checked; render();});
 $('#btnSim').addEventListener('click',()=>setSim(!S.sim));
 $('#maskRow').addEventListener('click',e=>{const b=e.target.closest('[data-mask]'); if(b){S.mask=b.dataset.mask; render();}});
@@ -1013,7 +1039,7 @@ function makeJSON(){ const d=D; const comp=c=>{const o={ref:c.ref,tipo:c.kind,x_
     if(c.kind==='button') o.funcion=c.action; return o;};
   return JSON.stringify({version:1,generado:new Date().toISOString(),pieza:{tipo:S.product,cantidad:S.product==='aro'?2:1,ancho_mm:r3(d.W),alto_mm:r3(d.H),grosor_mm:d.P.thick,forma:S.outline,margen_mm:S.margin,sujecion:d.mount.label,dibujo:S.artName},
     fabricacion:S.fab==='fab'?{metodo:'pcb_fabrica',mascara:S.mask,acabado:'ENIG'}:{metodo:'fresado_makera_z1',material:'FR4 cobre 35 µm doble cara'},
-    energia:{bateria:d.B.label,voltaje_v:d.B.v,consumo_medio_ma:r3(d.avg),pico_ma:Math.round(d.peak),autonomia_h:d.hours===Infinity?null:r3(d.hours)},microcontrolador:d.needMCU?'CH32V003J4M6':null,
+    energia:{bateria:d.B.label,voltaje_v:d.B.v,consumo_medio_ma:r3(d.avg),pico_ma:Math.round(d.peak),autonomia_h:d.hours===Infinity?null:r3(d.hours)},microcontrolador:d.needMCU?d.M.label:null,
     coordenadas:'mm, origen arriba-izquierda, Y hacia abajo (igual que KiCad)',
     componentes:d.comps.map(comp),piezas_reverso:d.parts.map(p=>({ref:p.ref,valor:p.val,huella:p.fp,x_mm:r3(p.x),y_mm:r3(p.y)})),
     agujeros:d.holes.map(h=>({x_mm:r3(h.x),y_mm:r3(h.y),diametro_mm:h.d})),contorno_mm:outlinePts(),
