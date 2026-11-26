@@ -170,6 +170,12 @@ td .mono{font-size:11.5px;color:var(--muted)}
 .layers .mono{font-size:11.5px;color:var(--muted);word-break:break-all}
 .gv-canvas{position:relative;flex:1;min-height:440px;overflow:hidden;cursor:grab;touch-action:none;background:radial-gradient(circle at 50% 40%,#263530,#1a2421)}
 .gv-canvas.panning{cursor:grabbing}
+.ib-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.ib-list button{width:100%;text-align:left;border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:9px 12px;cursor:pointer;font:inherit;color:inherit}
+.ib-list button[aria-current="true"]{border-color:var(--accent,#2f7d62);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent,#2f7d62) 25%,transparent)}
+.ib-list small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.ib-frame{flex:1;width:100%;min-height:560px;border:0;background:#fff}
+.ib-open{margin-left:auto;color:#eef5f1;font-weight:600}
 .gv-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:24px;padding:24px;transform-origin:50% 50%}
 .gv-inner figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;flex:1;min-width:0}
 .gv-inner figure svg{flex:1;width:100%;min-height:0;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45))}
@@ -215,7 +221,7 @@ td .mono{font-size:11.5px;color:var(--muted)}
   </div>
   <div class="top-right">
     <div class="apptabs" id="appTabs" role="tablist" aria-label="Secciones">
-      <button role="tab" data-app="config" aria-selected="true">Configurador</button><button role="tab" data-app="gerber" aria-selected="false">Visor Gerber</button>
+      <button role="tab" data-app="config" aria-selected="true">Configurador</button><button role="tab" data-app="gerber" aria-selected="false">Visor Gerber</button><button role="tab" data-app="ibom" aria-selected="false">BOM interactivo</button>
     </div>
     <div class="hist"><button id="btnUndo" class="ghost" aria-label="Deshacer" title="Deshacer (Ctrl+Z)" disabled>↶</button><button id="btnRedo" class="ghost" aria-label="Rehacer" title="Rehacer (Ctrl+Y)" disabled>↷</button></div>
     <button id="btnExport" class="primary">Exportar archivos de placa</button>
@@ -339,6 +345,25 @@ td .mono{font-size:11.5px;color:var(--muted)}
     </div>
     <div class="gv-canvas" id="gvCanvas"><div class="gv-inner" id="gvInner"></div><div class="gv-status" id="gvStatus"></div></div>
     <p class="bench-hint">Rueda para acercar, arrastra para mover, doble clic para centrar. Dibujado con tracespace (pcb-stackup 4.2.8, licencia MIT), el mismo motor open source de varios visores en línea.</p>
+  </section>
+</main>
+
+<main class="gview" id="viewIbom" hidden aria-label="BOM interactivo">
+  <aside class="gside">
+    <section class="step">
+      <h2>Placas publicadas</h2>
+      <p class="note">BOM interactivos generados en KiCad con InteractiveHtmlBom: la placa por ambas caras y su lista de piezas. Pasa el mouse por una fila para ver dónde va cada pieza.</p>
+      <ul class="ib-list" id="ibList"></ul>
+    </section>
+    <section class="step">
+      <h2>Ver uno tuyo</h2>
+      <label class="drop" id="ibDrop" for="ibFile"><strong>Arrastra un ibom.html</strong><span>Lo generas en KiCad: Herramientas › Complementos externos › Generate Interactive HTML BOM. Se ve solo en tu navegador, no se sube a ningún lado.</span><input type="file" id="ibFile" accept=".html,.htm,text/html"></label>
+      <p class="note">Para publicarlo aquí para todos, agrégalo a la carpeta <code>boms/</code> del repositorio y a la lista <code>IBOMS</code>.</p>
+    </section>
+  </aside>
+  <section class="bench" aria-label="Visor de BOM">
+    <div class="bench-bar"><span class="gv-meta" id="ibMeta"></span><a class="ib-open" id="ibOpen" target="_blank" rel="noopener">Abrir en pestaña nueva ↗</a></div>
+    <iframe class="ib-frame" id="ibFrame" title="BOM interactivo"></iframe>
   </section>
 </main>
 
@@ -1552,11 +1577,37 @@ $('#layerBox').addEventListener('change',e=>{ const it=S.layerFiles.find(x=>x.id
 $('#layerBox').addEventListener('click',e=>{ const b=e.target.closest('button[data-k="del"]'); if(!b) return; S.layerFiles=S.layerFiles.filter(x=>x.id!==+b.dataset.li); if(S.layerFiles.length&&loadLayerSet()){traceKey=''; render();} else if(!S.layerFiles.length) loadText(OWL,'buho_ejemplo.svg',true); else renderLayerBox(); });
 
 /* ---------- Pestañas de la app ---------- */
-function showApp(v){ const g=v==='gerber'; if(g&&GV.src==='design') { /* genera antes de ocultar la mesa: necesita el dibujo visible */ gvFromDesign(); }
-  $('#viewConfig').hidden=g; $('#viewGerber').hidden=!g; $$('#appTabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.app===(g?'gerber':'config'))));
-  $('#btnExport').hidden=g; try{ if(location.hash!==(g?'#gerber':'#configurador')) history.replaceState(null,'',g?'#gerber':'#configurador'); }catch(e){} }
+function showApp(v){ if(!['config','gerber','ibom'].includes(v)) v='config'; const g=v==='gerber';
+  if(g&&GV.src==='design') { /* genera antes de ocultar la mesa: necesita el dibujo visible */ gvFromDesign(); }
+  $('#viewConfig').hidden=v!=='config'; $('#viewGerber').hidden=!g; $('#viewIbom').hidden=v!=='ibom';
+  $$('#appTabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.app===v)));
+  if(v==='ibom') ibInit();
+  $('#btnExport').hidden=v!=='config'; const h={config:'#configurador',gerber:'#gerber',ibom:'#bom'}[v];
+  try{ if(location.hash!==h) history.replaceState(null,'',h); }catch(e){} }
+/* ---------- BOM interactivo (InteractiveHtmlBom) ---------- */
+const IBOMS=[
+  {id:'chihuahua',name:'Chihuahua RGB',desc:'Badge 42,8 × 45 mm · ATtiny202 · 2 WS2812 · supercap 1 F',file:'boms/chihuahua.html'},
+];
+let ibCur=null, ibUrl=null;
+function ibShow(it){ ibCur=it; const f=$('#ibFrame');
+  if(it.html!=null){ f.removeAttribute('src'); f.srcdoc=it.html; if(ibUrl) URL.revokeObjectURL(ibUrl); ibUrl=URL.createObjectURL(new Blob([it.html],{type:'text/html'})); $('#ibOpen').href=ibUrl; }
+  else { f.removeAttribute('srcdoc'); f.setAttribute('src',it.file); $('#ibOpen').setAttribute('href',it.file); }
+  $('#ibMeta').textContent=it.name+(it.desc?' — '+it.desc:'');
+  $$('#ibList [data-ib]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.ib===it.id))); }
+function ibInit(){ if($('#ibList').childElementCount) return;
+  $('#ibList').innerHTML=IBOMS.map(b=>`<li><button data-ib="${esc(b.id)}">${esc(b.name)}<small>${esc(b.desc||'')}</small></button></li>`).join('');
+  if(IBOMS.length) ibShow(IBOMS[0]); }
+function ibLoadFile(file){ if(!file) return; const rd=new FileReader();
+  rd.onload=()=>{ const html=String(rd.result); if(!/pcbdata|InteractiveHtmlBom/i.test(html)){ toast('Ese archivo no parece un BOM de InteractiveHtmlBom.'); return; }
+    const it={id:'local',name:file.name,desc:'archivo local',html}; $$('#ibList [data-ib]').forEach(b=>b.setAttribute('aria-current','false')); ibShow(it); };
+  rd.readAsText(file); }
+$('#ibList').addEventListener('click',e=>{ const b=e.target.closest('[data-ib]'); const it=b&&IBOMS.find(x=>x.id===b.dataset.ib); if(it) ibShow(it); });
+$('#ibFile').addEventListener('change',e=>{ ibLoadFile(e.target.files[0]); e.target.value=''; });
+['dragenter','dragover'].forEach(t=>$('#ibDrop').addEventListener(t,e=>{e.preventDefault(); $('#ibDrop').classList.add('over');}));
+['dragleave','drop'].forEach(t=>$('#ibDrop').addEventListener(t,e=>{e.preventDefault(); $('#ibDrop').classList.remove('over'); if(t==='drop') ibLoadFile(e.dataTransfer.files[0]);}));
 $('#appTabs').addEventListener('click',e=>{const b=e.target.closest('[data-app]'); if(b) showApp(b.dataset.app);});
-window.addEventListener('hashchange',()=>showApp(location.hash==='#gerber'?'gerber':'config'));
+const appFromHash=()=>({'#gerber':'gerber','#bom':'ibom'})[location.hash]||'config';
+window.addEventListener('hashchange',()=>showApp(appFromHash()));
 $('#gvRegen').addEventListener('click',()=>{ if(!$('#viewConfig').hidden) return; $('#viewConfig').hidden=false; $('#viewConfig').style.visibility='hidden'; $('#viewConfig').style.position='absolute'; gvFromDesign().finally(()=>{ $('#viewConfig').hidden=true; $('#viewConfig').style.visibility=''; $('#viewConfig').style.position=''; }); });
 $('#gvSrc').addEventListener('click',e=>{const b=e.target.closest('[data-v]'); if(!b) return; if(b.dataset.v==='design') $('#gvRegen').click(); else { GV.src='files'; setSeg('gvSrc','files'); $('#gvSrcNote').textContent=GV.items.length?'Tus archivos cargados. Puedes agregar más.':''; gvRender(); } });
 $('#gvView').addEventListener('click',e=>{const b=e.target.closest('[data-v]'); if(b){GV.view=b.dataset.v; gvShow();}});
@@ -1578,7 +1629,7 @@ cv.addEventListener('dblclick',gvFit);
 
 /* ---------- Inicio ---------- */
 loadText(OWL,'buho_ejemplo.svg',true);
-if(location.hash==='#gerber') showApp('gerber');
+if(location.hash==='#gerber'||location.hash==='#bom') showApp(appFromHash());
 </script>
 </body>
 </html>

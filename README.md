@@ -63,3 +63,15 @@ npm test   # Playwright + Chrome del sistema; las librerías CDN se sirven desde
 - Los textos de los SVG no pasan a Gerber: conviértelos a trazados.
 - En Gerber importados, las zonas con polaridad de borrado se dibujan rellenas en la vista previa.
 - No se revisan colisiones entre los componentes agregados y los de una placa importada.
+
+## BOM interactivo
+
+La pestaña **BOM interactivo** (`#bom`) muestra placas generadas en KiCad con
+[InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom) (licencia MIT): la placa por ambas caras y
+la lista de piezas, enlazadas entre sí. También se puede arrastrar un `ibom.html` propio para verlo sin subirlo.
+
+Para publicar una placa nueva:
+
+1. En KiCad: Herramientas › Complementos externos › Generate Interactive HTML BOM.
+2. Copia el `.html` generado a `boms/<nombre>.html`.
+3. Agrega una entrada a la lista `IBOMS` en `index.html` (`id`, `name`, `desc`, `file`).
