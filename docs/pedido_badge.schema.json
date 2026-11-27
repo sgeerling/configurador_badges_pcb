@@ -341,6 +341,10 @@
           },
           "zona_mm": {
             "$ref": "#/definitions/poly"
+          },
+          "huella": {
+            "type": "string",
+            "description": "Huella KiCad cuando difiere de la habitual (p. ej. LEDs de montaje inverso del reverso)."
           }
         }
       }
@@ -465,6 +469,62 @@
           },
           "texto": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "ventanas": {
+      "type": "array",
+      "description": "Ventanas translúcidas: zonas sin cobre (y por defecto sin máscara) para que la luz de los LEDs del reverso atraviese la fibra de vidrio.",
+      "items": {
+        "type": "object",
+        "required": [
+          "nombre",
+          "poligono_mm",
+          "sin_cobre"
+        ],
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "poligono_mm": {
+            "type": "array",
+            "minItems": 3,
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "sin_cobre": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "F.Cu",
+                "B.Cu"
+              ]
+            }
+          },
+          "abrir_mascara": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "F.Mask",
+                "B.Mask"
+              ]
+            }
+          },
+          "quitar_serigrafia": {
+            "type": "boolean"
+          },
+          "ilumina": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

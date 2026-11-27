@@ -47,14 +47,19 @@ Corregir todo ERC antes de seguir.
 3. `board_build(moves=[…])` con una entrada por pieza fija: `{"ref", "x": x_mm+100, "y": y_mm+100, "rot": rot_deg,
    "side": "top"|"bottom" según cara, "lock": true}`. Las resistencias de calor van centradas en `zona_mm`, en la cara B,
    también bloqueadas. Si queda `pending`, volver a llamar `board_build()`.
-4. Zona termocrómica: polígono `zona_mm` como apertura en `F.Mask` y cobre en `F.Cu` (gr_poly), conectado a GND o sin red.
-5. Arte: recorrer `arte` por `orden` ascendente. `F.SilkS` → gr_poly en F.SilkS; `F.Cu+F.Mask` → gr_poly en F.Cu y F.Mask;
+4. Ventanas translúcidas (`ventanas`): por cada una, un área prohibida (rule area) en F.Cu y B.Cu con el polígono
+   `poligono_mm` (+100 mm): sin pistas, vías ni relleno; los pads del LED del reverso que ilumina (`ilumina`) sí quedan.
+   Si `abrir_mascara` trae capas, gr_poly relleno en F.Mask/B.Mask (deja la fibra a la vista). Si `quitar_serigrafia`,
+   recortar la serigrafía del arte dentro del polígono. Los LEDs con `cara: "B"` son de montaje inverso: colocarlos en
+   la cara B con su `huella`, centrados en la ventana. Ninguna pieza libre puede quedar dentro de una ventana.
+5. Zona termocrómica: polígono `zona_mm` como apertura en `F.Mask` y cobre en `F.Cu` (gr_poly), conectado a GND o sin red.
+6. Arte: recorrer `arte` por `orden` ascendente. `F.SilkS` → gr_poly en F.SilkS; `F.Cu+F.Mask` → gr_poly en F.Cu y F.Mask;
    `borra` → nada (la máscara negra lo cubre), pero elimina lo que una pieza anterior dejó debajo si se superpone por completo;
    capas explícitas (`F.Cu`, `F.Mask`, …) tal cual. `huecos_mm` se restan (gr_poly con huecos o polígonos separados);
    `trazos_mm` como gr_line/gr_poly sin relleno con `ancho_mm`. Escribir el `.kicad_pcb` directo con KiCad cerrado
    (o `while_open='revert'` y pedir Archivo › Revertir).
-6. `board_build(steps=['route','pour','verify'])`. Pads de GND sin conexión: vía de GND junto al pad con pista corta.
-7. ERC y DRC en cero. Revisar `render(target='pcb3d')`.
+7. `board_build(steps=['route','pour','verify'])`. Pads de GND sin conexión: vía de GND junto al pad con pista corta.
+8. ERC y DRC en cero. Revisar `render(target='pcb3d')`.
 
 ## 5. Fabricación
 

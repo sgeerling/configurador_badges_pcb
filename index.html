@@ -405,7 +405,8 @@ const LED_PKGS={
   tht3:{label:'LED 3 mm (patitas)',fp:'LED_THT:LED_D3.0mm',d:3,mA:3,g:0.22,tht:true},
   tht5:{label:'LED 5 mm (patitas)',fp:'LED_THT:LED_D5.0mm',d:5,mA:3,g:0.35,tht:true},
   s0805:{label:'LED SMD 0805',fp:'LED_SMD:LED_0805_2012Metric',w:2.0,h:1.25,mA:2,g:0.01},
-  s1206:{label:'LED SMD 1206',fp:'LED_SMD:LED_1206_3216Metric',w:3.2,h:1.6,mA:2,g:0.02}
+  s1206:{label:'LED SMD 1206',fp:'LED_SMD:LED_1206_3216Metric',w:3.2,h:1.6,mA:2,g:0.02},
+  inv1206:{label:'LED 1206 montaje inverso',fp:'LED_SMD:LED_1206_3216Metric',w:3.2,h:1.6,mA:5,g:0.02,backOnly:true}
 };
 const LED_COLORS={rojo:{hex:'#ff3b30',vf:2.0,label:'Rojo'},ambar:{hex:'#ffb020',vf:2.1,label:'Ámbar'},verde:{hex:'#3be27f',vf:2.9,label:'Verde'},azul:{hex:'#3d84ff',vf:2.9,label:'Azul'},blanco:{hex:'#f2f6ff',vf:2.9,label:'Blanco'},rosa:{hex:'#ff5fb0',vf:2.9,label:'Rosa'}};
 const BEH_LED={fijo:'Siempre encendido',parpadeo:'Parpadeo',respiracion:'Respiración suave',tacto:'Se enciende al tocar'};
@@ -445,6 +446,8 @@ function fitsSilhouette(B){ if(!GEO.poly) return true; const key=traceKey+'|'+(B
   GEO.fitCache[key]=ok; return ok; }
 function pinsNeeded(comps){ let n=0; comps.forEach(c=>{ if(c.kind==='led'&&c.beh!=='fijo') n++; if(c.kind==='touch'||c.kind==='termo') n++; if(c.kind==='button'&&c.action==='modo') n++; }); if(comps.some(c=>c.kind==='rgb')) n++; return n; }
 function mcuFits(m,B){ if(m.extras.includes('regulador 3,3 V')) return !!B.usb&&!B.supercap; return m.vmin<=B.vlo&&m.vmax>=B.vhi; }
+const FR4='#d8cf9f'; /* fibra de vidrio sin cobre ni máscara, vista con luz */
+const SIDES={F:'Frente',B:'Reverso (la luz atraviesa la fibra)'}, WIN_R={3:'Círculo Ø6 mm',4:'Círculo Ø8 mm',6:'Círculo Ø12 mm',8:'Círculo Ø16 mm',11:'Círculo Ø22 mm'};
 const MASKS={negro:'#141518',verde:'#1d5a39',morado:'#4a2a6a',azul:'#1c3d70',rojo:'#86201f',blanco:'#ecece6',amarillo:'#d2ab1c'};
 const MASK_LBL={negro:'Negra',verde:'Verde',morado:'Morada',azul:'Azul',rojo:'Roja',blanco:'Blanca',amarillo:'Amarilla'};
 const GOLD='#d7b057';
@@ -458,6 +461,7 @@ const TOOLS=[
   {id:'rgb',label:'Luz de colores',icon:'<circle cx="9" cy="10" r="5" fill="#ff5a5a" opacity=".8"/><circle cx="17" cy="10" r="5" fill="#4b8bff" opacity=".8"/><circle cx="13" cy="16" r="5" fill="#3be27f" opacity=".8"/>'},
   {id:'termo',label:'Cambia de color con calor',icon:'<path d="M11 4a2 2 0 014 0v10a4 4 0 11-4 0z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="13" cy="17" r="2" fill="#f39ac4"/><path d="M13 9v6" stroke="#f39ac4" stroke-width="2"/>'},
   {id:'touch',label:'Sensor de toque',icon:'<circle cx="13" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="13" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="13" cy="12" r="1.5" fill="currentColor"/>'},
+  {id:'win',label:'Ventana translúcida',icon:'<rect x="4" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.4 1.6"/><circle cx="13" cy="12" r="3.6" fill="#f2d57a" opacity=".9"/><circle cx="13" cy="12" r="6" fill="#f2d57a" opacity=".25"/>'},
   {id:'button',label:'Botón',icon:'<rect x="5" y="7" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="13" cy="13" r="3.2" fill="currentColor"/>'}
 ];
 
@@ -473,7 +477,7 @@ const OWL=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 232">
 
 /* ---------- Estado ---------- */
 const S={product:'badge',size:80,mount:0,outline:'silueta',margin:2.5,fab:'fab',mask:'negro',battery:'auto',view:'front',look:'pcb',traces:true,
-  tool:'select',opt:{pkg:'s1206',color:'rojo',beh:'respiracion',rgbBeh:'arcoiris',pigment:'azul-rosa',act:'tacto',heater:'smd',action:'modo'},
+  tool:'select',opt:{pkg:'s1206',color:'rojo',beh:'respiracion',rgbBeh:'arcoiris',pigment:'azul-rosa',act:'tacto',heater:'smd',action:'modo',side:'F',winR:4},
   comps:[],sel:null,sim:false,artName:'',layerFiles:[],mcu:'auto',mountPos:{}};
 const ART={id:0,vb:null,els:[],mode:'single',board:null,boardBox:null};
 const GEO={W:60,H:60,s:1,ox:0,oy:0,poly:null,polyArea:0,centroid:null,silNode:null,islands:false,polyNote:''};
@@ -618,21 +622,37 @@ function pos(c){ if(c.el!=null&&ART.els[c.el]){const b=elMM(ART.els[c.el]); retu
 function addComp(kind,p,elIdx){
   const o=S.opt; const c={id:UID++,kind,u:p.x/GEO.W,v:p.y/GEO.H,el:null};
   if(elIdx!=null){const b=elMM(ART.els[elIdx]); if(kind==='termo'||b.area<GEO.W*GEO.H*0.07) c.el=elIdx;}
-  if(kind==='led') Object.assign(c,{pkg:o.pkg,color:o.color,beh:o.beh});
-  if(kind==='rgb') Object.assign(c,{beh:o.rgbBeh});
+  if(kind==='led') Object.assign(c,{pkg:o.pkg,color:o.color,beh:o.beh,side:o.side||'F'});
+  if(kind==='rgb') Object.assign(c,{beh:o.rgbBeh,side:o.side||'F'});
+  if(kind==='win'){ c.el=elIdx!=null?elIdx:null; Object.assign(c,{r:+o.winR||4,mask:true,silk:false}); }
   if(kind==='termo'){ if(c.el==null&&elIdx==null){} Object.assign(c,{pigment:o.pigment,act:o.act,heater:o.heater}); }
   if(kind==='button') Object.assign(c,{action:o.action});
-  S.comps.push(c); S.sel=c.id; return c;
+  S.comps.push(c); S.sel=c.id; ensureWindow(c); return c;
 }
+/* ---------- Ventanas translúcidas: zonas sin cobre para que la luz de un LED del reverso atraviese la fibra ---------- */
+function winHit(w,x,y){ if(w.el!=null&&ART.els[w.el]){ const n=ART.els[w.el].node, b=elMM(ART.els[w.el]);
+    if(x<b.x||x>b.x+b.w||y<b.y||y>b.y+b.h) return false;
+    try{ const wm=world.getScreenCTM(), nm=n.getScreenCTM(); if(wm&&nm&&n.isPointInFill){ const q=new DOMPoint(x,y).matrixTransform(wm).matrixTransform(nm.inverse()); return n.isPointInFill(new DOMPoint(q.x,q.y)); } }catch(e){}
+    return true; }
+  const p=w.x!=null?w:pos(w); return Math.hypot(x-p.x,y-p.y)<=(w.r||4); }
+function ensureWindow(c){ if(!(c.kind==='led'||c.kind==='rgb')||c.side!=='B') return; const p=pos(c);
+  if(S.comps.some(w=>w.kind==='win'&&winHit(w,p.x,p.y))) return;
+  S.comps.push({id:UID++,kind:'win',u:p.x/GEO.W,v:p.y/GEO.H,el:null,r:4,mask:true,silk:false}); toast('Agregué una ventana sin cobre de Ø8 mm sobre el LED del reverso para que su luz se vea.'); }
+function winPolys(d){ const W=d.comps.filter(c=>c.kind==='win'); if(!W.length) return [];
+  let geo=null; if(W.some(w=>w.el!=null)){ setLayerVis('all'); geo=artGeometry(); setLayerVis(S.view); }
+  return W.map(w=>{ let polys=[]; const a=w.el!=null&&geo?geo.find(x=>x.e.i===w.el):null;
+    if(a) polys=a.contours.filter((ct,k)=>!a.holes.has(k)&&ct.length>2);
+    if(!polys.length) polys=[Array.from({length:48},(_,k)=>[w.x+w.r*Math.cos(k*Math.PI/24),w.y+w.r*Math.sin(k*Math.PI/24)])];
+    return {w,polys}; }); }
 function zoneRect(c){ if(c.el!=null&&ART.els[c.el]){const b=elMM(ART.els[c.el]); const k=0.66; return {x:b.cx-b.w*k/2,y:b.cy-b.h*k/2,w:b.w*k,h:b.h*k};} const p=pos(c); return {x:p.x-3.5,y:p.y-3.5,w:7,h:7}; }
 
 /* ---------- Diseño derivado: energía, pistas, piezas ---------- */
 function derive(){
   const W=GEO.W,H=GEO.H,fab=S.fab==='fab',P=PRODUCTS[S.product],mount=P.mounts[S.mount];
   const tw={sig:fab?0.25:0.4,pwr:fab?0.5:0.6,heat:fab?0.2:0.4,pitch:fab?0.5:0.9};
-  const comps=S.comps.map(c=>Object.assign({},c,pos(c)));
+  const comps=S.comps.map(c=>Object.assign({},c,pos(c))); comps.forEach(c=>{ if(c.kind==='led'&&c.side==='B') c.pkg='inv1206'; if(c.kind==='win'&&c.el==null) c.r=+c.r||4; });
   let nD=0,nTP=0,nSW=0,nTH=0;
-  comps.forEach(c=>{ if(c.kind==='led'||c.kind==='rgb') c.ref='D'+(++nD); if(c.kind==='touch') c.ref='TP'+(++nTP); if(c.kind==='button') c.ref='SW'+(++nSW); if(c.kind==='termo') c.ref='Z'+(++nTH); });
+  comps.forEach(c=>{ if(c.kind==='led'||c.kind==='rgb') c.ref='D'+(++nD); if(c.kind==='touch') c.ref='TP'+(++nTP); if(c.kind==='button') c.ref='SW'+(++nSW); if(c.kind==='termo') c.ref='Z'+(++nTH); }); let nW=0; comps.forEach(c=>{ if(c.kind==='win') c.ref='W'+(++nW); });
   const has=k=>comps.some(c=>c.kind===k);
   const pinsReq=pinsNeeded(comps);
   let heatPeak=0; let rh=0;
@@ -684,6 +704,7 @@ function derive(){
   front.forEach((c,i)=>{ const bend=(i%2?1:-1)*0.22;
     let via;
     if(c.kind==='led'&&LED_PKGS[c.pkg].tht){ via={x:c.x+1.27,y:c.y}; }
+    else if(c.side==='B'){ const dir=(c.x<ctr.x)?1:-1; via={x:c.x+dir*LED_PKGS[c.pkg].w/2*0.8,y:c.y}; }
     else { const off=c.kind==='touch'?4.2:(LED_PKGS[c.pkg].w/2+1.3); const dir=(c.x<ctr.x)?1:-1; via={x:c.x+dir*off*0.7,y:c.y+off*0.75}; if(!insideBoard(via.x,via.y)) via={x:c.x-dir*off*0.7,y:c.y-off*0.75};
       const pad=c.kind==='touch'?{x:c.x,y:c.y}:{x:c.x+dir*LED_PKGS[c.pkg].w/2*0.8,y:c.y};
       tracksF.push({net:c.ref,w:tw.sig,...curve(pad,via,bend*1.4)}); vias.push({...via,net:c.ref}); }
@@ -693,8 +714,10 @@ function derive(){
     else tracksB.push({net:c.ref,w:tw.sig,...curve(via,hub,bend)});
   });
   const rgbs=comps.filter(c=>c.kind==='rgb').sort((a,b)=>Math.atan2(a.y-ctr.y,a.x-ctr.x)-Math.atan2(b.y-ctr.y,b.x-ctr.x));
-  rgbs.forEach((c,i)=>{ if(i===0){ const via={x:c.x,y:c.y+2.4}; vias.push({...via,net:'DIN'}); tracksF.push({net:'DIN',w:tw.sig,...curve({x:c.x,y:c.y+1},via,0.3)}); tracksB.push({net:'DIN',w:tw.sig,...curve(via,hub,0.2)}); }
-    else { const p=rgbs[i-1]; tracksF.push({net:'DOUT_'+p.ref,w:tw.sig,...curve({x:p.x+1,y:p.y},{x:c.x-1,y:c.y},0.28)}); } });
+  rgbs.forEach((c,i)=>{ if(i===0){ if(c.side==='B') tracksB.push({net:'DIN',w:tw.sig,...curve({x:c.x,y:c.y+1},hub,0.2)}); else { const via={x:c.x,y:c.y+2.4}; vias.push({...via,net:'DIN'}); tracksF.push({net:'DIN',w:tw.sig,...curve({x:c.x,y:c.y+1},via,0.3)}); tracksB.push({net:'DIN',w:tw.sig,...curve(via,hub,0.2)}); } }
+    else { const p=rgbs[i-1], a={x:p.x+1,y:p.y}, b={x:c.x-1,y:c.y}, net='DOUT_'+p.ref;
+      if((p.side||'F')===(c.side||'F')) (c.side==='B'?tracksB:tracksF).push({net,w:tw.sig,...curve(a,b,0.28)});
+      else { const v={x:(a.x+b.x)/2,y:(a.y+b.y)/2}; vias.push({...v,net}); (p.side==='B'?tracksB:tracksF).push({net,w:tw.sig,...curve(a,v,0.2)}); (c.side==='B'?tracksB:tracksF).push({net,w:tw.sig,...curve(v,b,0.2)}); } } });
   comps.filter(c=>c.kind==='termo').forEach((c,i)=>{ const z=c.zone; let q={x:z.x+z.w/2,y:z.y+z.h+2.6}; if(!insideBoard(q.x,q.y)) q={x:z.x+z.w+2.6,y:z.y+z.h/2};
     const Q={ref:'Q'+(++qn),kind:'q',x:q.x,y:q.y,w:2.9,h:1.3,fp:'Package_TO_SOT_SMD:SOT-23',val:'SI2302 MOSFET',side:'B',note:'Enciende el calefactor de '+c.ref}; parts.push(Q);
     tracksB.push({net:'HEAT_'+c.ref,w:tw.pwr,...curve({x:z.x+z.w/2,y:z.y+z.h},Q,0.1)}); if(mcu) tracksB.push({net:'GATE_'+c.ref,w:tw.sig,...curve(Q,mcu,(i%2?1:-1)*0.25)});
@@ -721,6 +744,13 @@ function derive(){
   comps.forEach(c=>{ if(c.kind==='led') weight+=LED_PKGS[c.pkg].g+0.004; if(c.kind==='rgb') weight+=0.01; if(c.kind==='button') weight+=0.15; if(c.kind==='termo') weight+=(c.nH||0)*0.01+0.05; });
   const warns=[];
   if(!comps.length) warns.push({lv:'info',t:'Aún no hay interacciones. Elige una en el paso 3 y toca el dibujo.'});
+  const wins=comps.filter(c=>c.kind==='win');
+  comps.filter(c=>(c.kind==='led'||c.kind==='rgb')&&c.side==='B').forEach(c=>{ if(!wins.some(w=>winHit(w,c.x,c.y))) warns.push({lv:'warn',t:`La luz de ${c.ref} (reverso) no se verá: no hay una ventana sin cobre encima. Agrégala con «Ventana translúcida» tocando el dibujo sobre el LED.`}); });
+  wins.forEach(w=>{ const hitT=[...tracksF,...tracksB].some(t=>(t.pts||[]).some(p=>winHit(w,p[0],p[1]))); if(hitT) warns.push({lv:'info',t:`Una pista pasa por la ventana ${w.ref} y se verá como una línea oscura. En el pedido para KiCad la ventana es zona prohibida y Copper la rodea.`});
+    const tz=comps.filter(c=>c.kind==='termo'&&c.zone&&winHit(w,c.zone.x+c.zone.w/2,c.zone.y+c.zone.h/2)).map(c=>c.ref); if(tz.length) warns.push({lv:'warn',t:`La ventana ${w.ref} cae sobre la zona termocrómica ${tz.join(', ')}: sin cobre el calefactor no funciona ahí. Usa formas distintas para cada efecto.`});
+    const under=parts.filter(p=>winHit(w,p.x,p.y)).map(p=>p.ref); if(under.length) warns.push({lv:'info',t:`${under.join(', ')} ${under.length>1?'quedan':'queda'} detrás de la ventana ${w.ref} y ${under.length>1?'taparían':'taparía'} la luz. Es provisional: en el pedido la ventana es zona prohibida y KiCad ${under.length>1?'las mueve':'la mueve'}.`});
+    if(!w.mask&&fab) warns.push({lv:'info',t:`La ventana ${w.ref} conserva la máscara ${MASK_LBL[S.mask].toLowerCase()}: ${isLight(MASKS[S.mask])?'deja pasar algo de luz':'casi no deja pasar la luz'}. Quítala para ver la fibra.`}); });
+  if(wins.length&&!fab) warns.push({lv:'info',t:'En la Makera Z1 cada ventana se fresa quitando el cobre de ambas caras: la fibra queda a la vista.'});
   mounts.forEach(m=>{ const rr=m.r+0.6; const ok=Array.from({length:12},(_,k)=>insideBoard(m.x+rr*Math.cos(k*Math.PI/6),m.y+rr*Math.sin(k*Math.PI/6))).every(Boolean)&&insideBoard(m.x,m.y);
     if(!ok) warns.push({lv:'crit',t:`La sujeción «${m.label}» queda fuera de la placa o muy pegada al borde. Muévela hacia adentro o usa «Posición automática».`}); });
   if(comps.length&&B.d&&Math.min(W,H)<B.d+3) warns.push({lv:'crit',t:`La ${B.short} mide ${B.d} mm y no cabe en una placa de ${fmt(W)} × ${fmt(H)} mm. Agranda la pieza o cambia la energía.`});
@@ -774,7 +804,7 @@ function recolorArt(){
       :{'cu-top':Z1.bright,'cu-bottom':Z1.bright,'sm-top':'none','sm-bottom':'none','ss-top':'none','ss-bottom':'none','sp-top':'none','sp-bottom':'none','drill':'#1f2b27','outline':'none'};
     ART.els.forEach(e=>{ const n=e.node; let c=P[e.slot]||'none'; const clear=e.fill!=='none'&&e.fill!=='url'&&lum(e.fill)>0.92; if(clear&&c!=='none') c=e.slot&&e.slot.endsWith('bottom')?backColor():boardColor()==='url(#cu)'?Z1.milled:boardColor();
       n.setAttribute('fill',e.fill==='none'?'none':c); n.setAttribute('stroke',e.stroke==='none'?'none':c); n.setAttribute('stroke-width',e.sw); n.setAttribute('opacity',S.look==='orig'&&/^sm/.test(e.slot||'')?0.55:1); e.base=n.getAttribute('fill'); });
-    S.comps.filter(c=>c.kind==='termo'&&c.el!=null&&ART.els[c.el]).forEach(c=>ART.els[c.el].node.setAttribute('fill',PIGMENTS[c.pigment].cold)); return; }
+    S.comps.filter(c=>c.kind==='termo'&&c.el!=null&&ART.els[c.el]).forEach(c=>ART.els[c.el].node.setAttribute('fill',PIGMENTS[c.pigment].cold)); recolorWins(); return; }
   const map=l=>fab?(l<0.33?shade(mask,isLight(mask)?-0.06:0.07):l<0.7?GOLD:silk):(l<0.33?Z1.milled:l<0.7?Z1.patina:Z1.bright);
   ART.els.forEach(e=>{const n=e.node;
     if(S.look==='orig'){ n.setAttribute('fill',e.fill==='url'?'#888':e.fill); n.setAttribute('stroke',e.stroke==='url'?'#888':e.stroke); n.setAttribute('stroke-width',e.sw); }
@@ -783,7 +813,9 @@ function recolorArt(){
       else { n.setAttribute('stroke',map(e.ls)); n.setAttribute('stroke-width',e.sw); } }
     e.base=n.getAttribute('fill'); });
   S.comps.filter(c=>c.kind==='termo'&&c.el!=null&&ART.els[c.el]).forEach(c=>{const e=ART.els[c.el]; e.node.setAttribute('fill',PIGMENTS[c.pigment].cold);});
+  recolorWins();
 }
+function recolorWins(){ if(S.look==='orig') return; S.comps.filter(c=>c.kind==='win'&&c.el!=null&&ART.els[c.el]).forEach(c=>{ const n=ART.els[c.el].node; n.setAttribute('fill',c.mask||S.fab!=='fab'?FR4:mix(MASKS[S.mask],FR4,0.25)); }); }
 
 function buildBoard(){
   const g=$('#boardLayer'); g.innerHTML='';
@@ -854,7 +886,16 @@ function drawComps(Dv){ const g=$('#compLayer'); g.innerHTML=''; SIM.glow.clear(
       if(c.el!=null&&ART.els[c.el]){ const n=ART.els[c.el].node; SIM.zones.set(c.id,{node:n,cold:PIGMENTS[c.pigment].cold,hot:PIGMENTS[c.pigment].hot||ART.els[c.el].base}); if(S.sel===c.id){const b=elMM(ART.els[c.el]); el('rect',{x:b.x-0.8,y:b.y-0.8,width:b.w+1.6,height:b.h+1.6,rx:1,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'1 0.6'},g);} }
       else { const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g); const n=el('circle',{r:5,fill:PIGMENTS[c.pigment].cold},gg); SIM.zones.set(c.id,{node:n,cold:PIGMENTS[c.pigment].cold,hot:PIGMENTS[c.pigment].hot||GOLD}); if(S.sel===c.id) el('circle',{r:6,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'1 0.6'},gg); }
       return; }
-    if(S.view==='back') return;
+    if(c.kind==='win'){ const fr=c.mask||!Dv.fab?FR4:mix(MASKS[S.mask],FR4,0.25), sel=S.sel===c.id;
+      if(c.el!=null&&ART.els[c.el]){ const b=elMM(ART.els[c.el]); if(S.view==='back'||sel) el('rect',{x:b.x-0.6,y:b.y-0.6,width:b.w+1.2,height:b.h+1.2,rx:1,fill:'none',stroke:sel?'#ffb27a':'#e9dca6','stroke-width':sel?0.3:0.2,'stroke-dasharray':'1 0.6'},g); }
+      else { const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g); el('circle',{r:c.r,fill:fr,stroke:'#b8ad7c','stroke-width':0.15},gg); if(sel) el('circle',{r:c.r+0.8,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'1 0.6'},gg); }
+      if(S.view==='capas') label(g,c.x,c.y-(c.r||4)-0.8,c.ref,1.2); return; }
+    const isB=(c.kind==='led'||c.kind==='rgb')&&c.side==='B';
+    if(S.view==='back'&&!isB) return;
+    if(S.view!=='back'&&isB){ const lit=Dv.comps.some(w=>w.kind==='win'&&winHit(w,c.x,c.y)); const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g);
+      const col=c.kind==='led'?LED_COLORS[c.color].hex:'#ff70c0'; if(lit) SIM.glow.set(c.id,el('circle',{r:5,fill:col,filter:'url(#glow)',opacity:0.35},gg));
+      el('circle',{r:2.2,fill:'none',stroke:lit?'#efe9dc':'#ff8a7a','stroke-width':0.18,'stroke-dasharray':'0.5 0.45',opacity:0.85},gg); if(S.sel===c.id) el('circle',{r:3,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'0.8 0.5'},gg); el('circle',{r:2.6,fill:'transparent'},gg);
+      if(S.view==='capas') label(gg,0,-3,c.ref+' (reverso)',1.1); return; }
     const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g);
     if(c.kind==='led'){ const pk=LED_PKGS[c.pkg],col=LED_COLORS[c.color].hex; const sz=pk.d||pk.w;
       SIM.glow.set(c.id,el('circle',{r:sz*1.5,fill:col,filter:'url(#glow)',opacity:0.18},gg));
@@ -948,16 +989,18 @@ function renderPanels(){
   const sb=$('#selBatt'); sb.innerHTML=`<option value="auto" ${S.battery==='auto'?'selected':''}>Automática (ahora: ${BATT[D.bk].short})</option>`+Object.keys(BATT).map(k=>`<option value="${k}" ${S.battery===k?'selected':''}>${BATT[k].label}</option>`).join('');
   $('#btnSim').setAttribute('aria-pressed',String(S.sim)); $('#btnSim').textContent=S.sim?'Detener prueba':'Probar encendido';
   $('#chkTraces').checked=S.traces;
-  const hints={select:'Arrastra componentes o sujeciones (círculos punteados) para moverlos. Supr borra el componente seleccionado.',led:'Toca el dibujo para poner un LED. Si tocas un ojo u otro punto pequeño, el LED se centra solo.',rgb:'Toca el dibujo para poner LEDs de colores. Se encadenan en orden alrededor del centro.',termo:'Toca una forma del dibujo para volverla zona termocrómica. Su calefactor va justo detrás.',touch:'Toca donde quieras el sensor: es un círculo de cobre que reacciona al dedo.',button:'El botón va en el reverso; tócalo donde quieras que quede.'};
+  const hints={select:'Arrastra componentes o sujeciones (círculos punteados) para moverlos. Supr borra el componente seleccionado.',led:'Toca el dibujo para poner un LED. Si tocas un ojo u otro punto pequeño, el LED se centra solo.',rgb:'Toca el dibujo para poner LEDs de colores. Se encadenan en orden alrededor del centro.',termo:'Toca una forma del dibujo para volverla zona termocrómica. Su calefactor va justo detrás.',touch:'Toca donde quieras el sensor: es un círculo de cobre que reacciona al dedo.',button:'El botón va en el reverso; tócalo donde quieras que quede.',win:'Toca una forma del dibujo para dejarla sin cobre, o cualquier punto para un círculo. Pon detrás un LED con la cara «Reverso» y su luz atravesará la fibra.'};
   $('#hint').textContent=(S.view==='back'?'Vista del reverso: las piezas en gris son provisionales, KiCad decide su lugar final. Aquí van batería, chip y calefactores. ':S.view==='capas'?'Capas superpuestas: la línea amarilla es el contorno que se exporta. ':'')+hints[S.tool];
   renderSel(); renderSummary();
 }
+function frontPkgs(){ const o={}; Object.entries(LED_PKGS).forEach(([k,v])=>{ if(!v.backOnly) o[k]=v; }); return o; }
 function optSelect(scope,k,obj,val,lbl){ return `<label class="field"><span>${lbl}</span><select data-scope="${scope}" data-k="${k}">${Object.entries(obj).map(([v,o])=>`<option value="${v}" ${v===val?'selected':''}>${typeof o==='string'?o:o.label}</option>`).join('')}</select></label>`; }
 function colorChips(scope,val){ return `<div class="field"><span>Color de la luz</span><div class="chips">${Object.entries(LED_COLORS).map(([k,c])=>`<button class="chip" data-scope="${scope}" data-k="color" data-v="${k}" aria-pressed="${k===val}" title="${c.label}" aria-label="${c.label}" style="background:${c.hex}"></button>`).join('')}</div></div>`; }
 function renderToolOpts(){ const o=S.opt,t=S.tool; let h='';
   if(t==='select') h='<p class="note">Elige una interacción para agregarla, o toca un componente para editarlo a la derecha.</p>';
-  if(t==='led') h=optSelect('tool','pkg',LED_PKGS,o.pkg,'Tipo de LED')+colorChips('tool',o.color)+optSelect('tool','beh',BEH_LED,o.beh,'Comportamiento');
-  if(t==='rgb') h='<p class="note">WS2812B-2020: LEDs de 2 mm que muestran cualquier color y se controlan en cadena.</p>'+optSelect('tool','rgbBeh',BEH_RGB,o.rgbBeh,'Efecto');
+  if(t==='led') h=optSelect('tool','side',SIDES,o.side,'Cara')+(o.side==='B'?'<p class="note">LED 1206 de montaje inverso: se suelda en el reverso e ilumina hacia la placa. Su luz se ve a través de una ventana sin cobre.</p>':optSelect('tool','pkg',frontPkgs(),o.pkg,'Tipo de LED'))+colorChips('tool',o.color)+optSelect('tool','beh',BEH_LED,o.beh,'Comportamiento');
+  if(t==='rgb') h=optSelect('tool','side',SIDES,o.side,'Cara')+(o.side==='B'?'<p class="note">SK6812MINI-E de montaje inverso en el reverso: su color se ve a través de una ventana sin cobre.</p>':'<p class="note">WS2812B-2020: LEDs de 2 mm que muestran cualquier color y se controlan en cadena.</p>')+optSelect('tool','rgbBeh',BEH_RGB,o.rgbBeh,'Efecto');
+  if(t==='win') h='<p class="note">Zona sin cobre en ambas caras y sin máscara: la fibra de vidrio (FR4) queda translúcida y deja ver la luz de un LED del reverso. Toca una forma del dibujo para usar su silueta, o cualquier punto para un círculo.</p>'+optSelect('tool','winR',WIN_R,String(o.winR),'Tamaño del círculo');
   if(t==='termo') h=optSelect('tool','pigment',PIGMENTS,o.pigment,'Pigmento')+optSelect('tool','act',ACT_TERMO,o.act,'Se calienta')+optSelect('tool','heater',HEATERS,o.heater,'Calefactor');
   if(t==='touch') h='<p class="note">Un círculo de cobre conectado al microcontrolador. Al tocarlo se activa todo lo marcado como “al tocar”.</p>';
   if(t==='button') h=optSelect('tool','action',{modo:'Cambia de modo',onoff:'Enciende y apaga'},o.action,'Función');
@@ -976,15 +1019,19 @@ function renderMountSel(p,m){ p.innerHTML=`<div class="sel-head"><h2>Sujeción <
   <button class="ghost" id="mountAuto"${m.manual?'':' disabled'}>Posición automática</button>`; }
 function renderSel(){ const p=$('#selPanel'); if(typeof S.sel==='string'&&/^m\d+$/.test(S.sel)){ const m=D.mounts[+S.sel.slice(1)]; if(m){ renderMountSel(p,m); return; } S.sel=null; }
   const c=S.comps.find(x=>x.id===S.sel); if(!c){p.innerHTML='';return;} const d=D.comps.find(x=>x.id===c.id)||{};
-  const names={led:'Luz LED',rgb:'Luz de colores',termo:'Zona termocrómica',touch:'Sensor de toque',button:'Botón'};
+  const names={led:'Luz LED',rgb:'Luz de colores',termo:'Zona termocrómica',touch:'Sensor de toque',button:'Botón',win:'Ventana translúcida'};
   let h=`<div class="sel-head"><h2>${names[c.kind]} <span class="pill">${d.ref||''}</span></h2><button class="link danger" id="selDel">Eliminar</button></div>`;
-  if(c.kind==='led'){ h+=optSelect('sel','pkg',LED_PKGS,c.pkg,'Tipo de LED')+colorChips('sel',c.color)+optSelect('sel','beh',BEH_LED,c.beh,'Comportamiento')+`<div class="calc"><span>Resistencia: ${ohm(d.R)} (0603)</span><span>Corriente: ${LED_PKGS[c.pkg].mA} mA a ${fmt(D.B.v)} V</span></div>`; }
+  if(c.kind==='led'||c.kind==='rgb') h+=optSelect('sel','side',SIDES,c.side||'F','Cara');
+  if(c.kind==='led'){ h+=(c.side==='B'?'<p class="note">LED 1206 de montaje inverso (ilumina hacia la placa).</p>':optSelect('sel','pkg',frontPkgs(),c.pkg,'Tipo de LED'))+colorChips('sel',c.color)+optSelect('sel','beh',BEH_LED,c.beh,'Comportamiento')+`<div class="calc"><span>Resistencia: ${ohm(d.R)} (0603)</span><span>Corriente: ${LED_PKGS[c.pkg].mA} mA a ${fmt(D.B.v)} V</span></div>`; }
   if(c.kind==='rgb') h+=optSelect('sel','beh',BEH_RGB,c.beh,'Efecto');
   if(c.kind==='termo'){ h+=optSelect('sel','pigment',PIGMENTS,c.pigment,'Pigmento')+optSelect('sel','act',ACT_TERMO,c.act,'Se calienta')+optSelect('sel','heater',HEATERS,c.heater,'Calefactor');
     h+= c.heater==='smd'?`<div class="calc"><span>${d.nH} × ${ohm(d.Rh)} (1206) en paralelo</span><span>Potencia: ${fmt(d.heatP,2)} W · ${fmt(d.heatI,0)} mA a 3,7 V</span><span>Zona: ${fmt(d.zone.w)} × ${fmt(d.zone.h)} mm</span></div>`
       :`<div class="calc"><span>Serpentín: ${fmt(d.serp.len,0)} mm de pista de ${D.tw.heat} mm</span><span>Resistencia ≈ ${fmt(d.Rh,2)} Ω (cobre 35 µm)</span><span>Corriente a 3,7 V: ${fmt(d.heatI/1000,2)} A</span></div>`; }
   if(c.kind==='button') h+=optSelect('sel','action',{modo:'Cambia de modo',onoff:'Enciende y apaga'},c.action,'Función');
   if(c.kind==='touch') h+='<p class="note">Pad de cobre conectado al microcontrolador por una vía.</p>';
+  if(c.kind==='win'){ if(c.el==null) h+=optSelect('sel','r',WIN_R,String(c.r),'Tamaño'); else h+='<p class="note">Usa la silueta de la forma del dibujo que tocaste.</p>';
+    h+=`<label class="field chk"><input type="checkbox" data-scope="sel" data-k="mask" ${c.mask?'checked':''}> Quitar la máscara en ambas caras (deja la fibra a la vista)</label><label class="field chk"><input type="checkbox" data-scope="sel" data-k="silk" ${c.silk?'checked':''}> Mantener la serigrafía del dibujo encima</label>`;
+    const n=d.ref?D.comps.filter(x=>(x.kind==='led'||x.kind==='rgb')&&x.side==='B'&&winHit(d,x.x,x.y)).map(x=>x.ref):[]; h+=`<p class="note">Sin cobre en ninguna cara. ${n.length?'Ilumina: '+n.join(', ')+'.':'Ningún LED del reverso debajo todavía: pon uno con la cara «Reverso».'} La FR4 de 1,6 mm difunde la luz; con 0,8 mm se ve más nítida.</p>`; }
   p.innerHTML=h; }
 function renderSummary(){ const d=D;
   const hrs=d.hours===Infinity?'—':(d.minutes!==null&&d.minutes<120)?fmt(d.minutes,d.minutes<10?1:0)+' min':d.hours>=48?fmt(d.hours/24,0)+' días':fmt(d.hours,d.hours<10?1:0)+' h';
@@ -996,8 +1043,8 @@ function renderSummary(){ const d=D;
   const rows=bomRows(d); $('#bom').innerHTML='<thead><tr><th>Ref.</th><th>Pieza</th><th style="text-align:right">Cant.</th></tr></thead><tbody>'+rows.map(r=>`<tr><td class="mono">${r.refs}</td><td>${esc(r.val)}<br><span class="mono">${esc(r.fp||r.note||'')}</span></td><td class="num">${r.qty}</td></tr>`).join('')+'</tbody>'; }
 
 function bomRows(d){ const m=new Map(); const add=(ref,val,fp,side,note)=>{const k=val+'|'+fp; if(!m.has(k)) m.set(k,{refs:[],val,fp,side,note,qty:0}); const r=m.get(k); r.refs.push(ref); r.qty++;};
-  d.comps.forEach(c=>{ if(c.kind==='led') add(c.ref,`${LED_PKGS[c.pkg].label} ${LED_COLORS[c.color].label.toLowerCase()}`,LED_PKGS[c.pkg].fp,'F');
-    if(c.kind==='rgb') add(c.ref,'LED RGB WS2812B-2020','LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm','F');
+  d.comps.forEach(c=>{ if(c.kind==='led') add(c.ref,`${LED_PKGS[c.pkg].label} ${LED_COLORS[c.color].label.toLowerCase()}`,LED_PKGS[c.pkg].fp,c.side==='B'?'B':'F');
+    if(c.kind==='rgb') { if(c.side==='B') add(c.ref,'LED RGB SK6812MINI-E (montaje inverso)','LED_SMD:LED_SK6812MINI-E_PLCC4_3.2x2.8mm','B'); else add(c.ref,'LED RGB WS2812B-2020','LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm','F'); }
     if(c.kind==='touch') add(c.ref,'Pad de toque (cobre)','TestPoint:TestPoint_Pad_D4.0mm','F');
     if(c.kind==='button') add(c.ref,'Pulsador SMD','Button_Switch_SMD:SW_SPST_PTS810','B');
     if(c.kind==='termo') add(c.ref,'Pintura termocrómica '+PIGMENTS[c.pigment].label,'','F','Aplicar sobre el cobre de la zona'); });
@@ -1026,7 +1073,7 @@ stage.addEventListener('pointerdown',e=>{ if(!ART.vb) return; const p=toMM(e);
   const mg=S.sim?null:e.target.closest('[data-mount]');
   if(mg){ const i=+mg.dataset.mount; S.sel='m'+i; drag={mount:i,moved:false}; stage.setPointerCapture(e.pointerId); render(); return; }
   if(cg){ const id=+cg.dataset.comp; S.sel=id; drag={id,moved:false}; stage.setPointerCapture(e.pointerId); render(); return; }
-  if(elIdx!=null&&(S.tool==='select'||S.tool==='termo')){ const z=S.comps.find(c=>c.kind==='termo'&&c.el===elIdx); if(z){ S.sel=z.id; render(); return; } }
+  if(elIdx!=null&&(S.tool==='select'||S.tool==='termo'||S.tool==='win')){ const z=S.comps.find(c=>(c.kind==='termo'||c.kind==='win')&&c.el===elIdx&&(S.tool==='select'||c.kind===S.tool)); if(z){ S.sel=z.id; render(); return; } }
   if(S.tool==='select'){ S.sel=null; render(); return; }
   if(!insideBoard(p.x,p.y)){ toast('Toca dentro de la placa.'); return; }
   if(S.tool==='termo'&&elIdx==null&&S.view==='front'){ /* zona libre circular */ }
@@ -1057,8 +1104,9 @@ $('#chkTraces').addEventListener('change',e=>{S.traces=e.target.checked; render(
 $('#btnSim').addEventListener('click',()=>setSim(!S.sim));
 $('#maskRow').addEventListener('click',e=>{const b=e.target.closest('[data-mask]'); if(b){S.mask=b.dataset.mask; render();}});
 function optChange(t){ const scope=t.dataset.scope,k=t.dataset.k; if(!scope) return; const v=t.dataset.v||t.value;
-  if(scope==='tool') S.opt[{pkg:'pkg',color:'color',beh:'beh',rgbBeh:'rgbBeh',pigment:'pigment',act:'act',heater:'heater',action:'action'}[k]]=v;
-  else { const c=S.comps.find(x=>x.id===S.sel); if(c) c[k]=v; }
+  let val=t.type==='checkbox'?t.checked:(k==='r'||k==='winR')?+v:v;
+  if(scope==='tool') S.opt[{pkg:'pkg',color:'color',beh:'beh',rgbBeh:'rgbBeh',pigment:'pigment',act:'act',heater:'heater',action:'action',side:'side',winR:'winR'}[k]]=val;
+  else { const c=S.comps.find(x=>x.id===S.sel); if(c){ c[k]=val; if(k==='side') ensureWindow(c); } }
   render(); }
 document.addEventListener('change',e=>{ if(e.target.dataset&&e.target.dataset.scope) optChange(e.target);
   if(e.target.dataset&&e.target.dataset.mk&&typeof S.sel==='string'){ const i=+S.sel.slice(1), m=D.mounts[i], v=parseFloat(String(e.target.value).replace(',','.')); if(!m||!isFinite(v)) return;
@@ -1107,16 +1155,17 @@ function makeArt(){ const fab=S.fab==='fab'; const groups=fab?{silk:[0.7,1.01],c
     ${parts.join('\n    ')}
   </g>
 </svg>`; }
-function makeJSON(){ const d=D; const comp=c=>{const o={ref:c.ref,tipo:c.kind,x_mm:r3(c.x),y_mm:r3(c.y),lado:c.kind==='button'?'reverso':'frente'};
+function makeJSON(){ const d=D; const comp=c=>{const o={ref:c.ref,tipo:c.kind,x_mm:r3(c.x),y_mm:r3(c.y),lado:(c.kind==='button'||c.side==='B')?'reverso':'frente'};
     if(c.kind==='led') Object.assign(o,{huella:LED_PKGS[c.pkg].fp,color:c.color,comportamiento:c.beh,resistencia_ohm:c.R});
     if(c.kind==='rgb') Object.assign(o,{huella:'LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm',efecto:c.beh});
     if(c.kind==='termo') Object.assign(o,{pigmento:c.pigment,activacion:c.act,calefactor:c.heater,zona_mm:{x:r3(c.zone.x),y:r3(c.zone.y),ancho:r3(c.zone.w),alto:r3(c.zone.h)},potencia_w:r3(c.heatP),corriente_ma:Math.round(c.heatI)});
     if(c.kind==='button') o.funcion=c.action; return o;};
+  const WPj=winPolys(d);
   return JSON.stringify({version:1,generado:new Date().toISOString(),pieza:{tipo:S.product,cantidad:S.product==='aro'?2:1,ancho_mm:r3(d.W),alto_mm:r3(d.H),grosor_mm:d.P.thick,forma:S.outline,margen_mm:S.margin,sujecion:d.mount.label,dibujo:S.artName},
     fabricacion:S.fab==='fab'?{metodo:'pcb_fabrica',mascara:S.mask,acabado:'ENIG'}:{metodo:'fresado_makera_z1',material:'FR4 cobre 35 µm doble cara'},
     energia:{bateria:d.B.label,voltaje_v:d.B.v,consumo_medio_ma:r3(d.avg),pico_ma:Math.round(d.peak),autonomia_h:d.hours===Infinity?null:r3(d.hours)},microcontrolador:d.needMCU?d.M.label:null,
     coordenadas:'mm, origen arriba-izquierda, Y hacia abajo (igual que KiCad)',
-    componentes:d.comps.map(comp),piezas_reverso:d.parts.map(p=>({ref:p.ref,valor:p.val,huella:p.fp,x_mm:r3(p.x),y_mm:r3(p.y)})),
+    componentes:d.comps.filter(c=>c.kind!=='win').map(comp),ventanas:WPj.map(x=>({ref:x.w.ref,poligonos_mm:x.polys.map(pl=>rdpClosed(pl,0.03).map(p=>[r3(p[0]),r3(p[1])])),sin_cobre:['F.Cu','B.Cu'],quitar_mascara:!!x.w.mask,mantener_serigrafia:!!x.w.silk})),piezas_reverso:d.parts.map(p=>({ref:p.ref,valor:p.val,huella:p.fp,x_mm:r3(p.x),y_mm:r3(p.y)})),
     agujeros:d.holes.map(h=>({x_mm:r3(h.x),y_mm:r3(h.y),diametro_mm:h.d})),contorno_mm:outlinePts(),
     pistas:[...d.tracksF.map(t=>({capa:'F.Cu',red:t.net,ancho_mm:t.w,puntos:t.pts})),...d.tracksB.map(t=>({capa:'B.Cu',red:t.net,ancho_mm:t.w,puntos:t.pts}))],
     vias:d.vias.map(v=>({x_mm:r3(v.x),y_mm:r3(v.y),red:v.net})),revisiones:d.warns.map(w=>({nivel:w.lv,texto:w.t}))},null,2); }
@@ -1137,9 +1186,9 @@ function makePedido(){ render(); const d=D,B=d.B,M=d.M;
     if(e.fill!=='none'&&regs.length){ const tt=t||tone(e.lf); arte.push({capa:capa||capaTono[tt],tono:tt,orden:i,poligonos_mm:regs,huecos_mm:hol,trazos_mm:[]}); }
     if(e.stroke!=='none'&&a.swMM>=0.06){ const tt=t||tone(e.ls); arte.push({capa:capa||capaTono[tt],tono:tt,orden:i,poligonos_mm:[],huecos_mm:[],trazos_mm:a.contours.filter(c=>c.length>1).map(c=>({puntos:P(c),ancho_mm:r3(a.swMM),cerrado:!!a.closed}))}); } });
   const circle=(x,y,r)=>Array.from({length:24},(_,k)=>[r3(x+r*Math.cos(k*Math.PI/12)),r3(y+r*Math.sin(k*Math.PI/12))]);
-  const fixed=d.comps.map(c=>{ const o={ref:c.ref,rol:c.kind,lcsc:null,valor:'',x_mm:r3(c.x),y_mm:r3(c.y),rot_deg:0,cara:c.kind==='button'?'B':'F',funcion:{}};
-    if(c.kind==='led'){ o.valor=`${LED_PKGS[c.pkg].label} ${LED_COLORS[c.color].label.toLowerCase()}`; if(c.pkg==='s1206'&&c.color==='rojo') o.lcsc='C2827254'; o.funcion={control:c.beh==='fijo'?'fijo':'mcu',comportamiento:c.beh,color:c.color,corriente_ma:LED_PKGS[c.pkg].mA,resistencia_ohm:c.R}; }
-    if(c.kind==='rgb'){ o.valor='LED RGB WS2812B-2020'; o.funcion={control:'mcu',efecto:c.beh}; }
+  const fixed=d.comps.filter(c=>c.kind!=='win').map(c=>{ const o={ref:c.ref,rol:c.kind,lcsc:null,valor:'',x_mm:r3(c.x),y_mm:r3(c.y),rot_deg:0,cara:(c.kind==='button'||c.side==='B')?'B':'F',funcion:{}};
+    if(c.kind==='led'){ o.valor=`${LED_PKGS[c.pkg].label} ${LED_COLORS[c.color].label.toLowerCase()}`; if(c.pkg==='s1206'&&c.color==='rojo') o.lcsc='C2827254'; if(c.side==='B') o.huella=LED_PKGS[c.pkg].fp; o.funcion={control:c.beh==='fijo'?'fijo':'mcu',comportamiento:c.beh,color:c.color,corriente_ma:LED_PKGS[c.pkg].mA,resistencia_ohm:c.R}; }
+    if(c.kind==='rgb'){ o.valor=c.side==='B'?'LED RGB SK6812MINI-E (montaje inverso)':'LED RGB WS2812B-2020'; if(c.side==='B') o.huella='LED_SMD:LED_SK6812MINI-E_PLCC4_3.2x2.8mm'; o.funcion={control:'mcu',efecto:c.beh}; }
     if(c.kind==='touch'){ o.valor='Pad de toque Ø4 mm (cobre)'; o.funcion={control:'mcu'}; }
     if(c.kind==='button'){ o.valor='Pulsador SMD PTS810'; o.funcion={control:c.action==='modo'?'mcu':'energia',accion:c.action}; }
     if(c.kind==='termo'){ o.valor='Zona termocrómica · '+PIGMENTS[c.pigment].label; o.funcion={control:'mcu',pigmento:c.pigment,activacion:c.act,calefactor:c.heater,n_resistencias:c.nH||0,resistencia_ohm:r3(c.Rh||0),potencia_w:r3(c.heatP||0),corriente_ma:Math.round(c.heatI||0)};
@@ -1158,6 +1207,7 @@ function makePedido(){ render(); const d=D,B=d.B,M=d.M;
     pieza:{tipo:S.product,cantidad:S.product==='aro'?2:1,ancho_mm:r3(d.W),alto_mm:r3(d.H),grosor_mm:d.P.thick,sujecion:d.mount.label,nombre:S.artName||'badge'},
     fabricacion:S.fab==='fab'?{metodo:'pcb_fabrica',mascara:S.mask,acabado:'ENIG'}:{metodo:'fresado_makera_z1'},
     contorno_mm:P(outlinePts()),agujeros:d.holes.map(h=>({x_mm:r3(h.x),y_mm:r3(h.y),diametro_mm:h.d,uso:d.mount.id})),arte,
+    ventanas:winPolys(d).flatMap(x=>x.polys.map(pl=>({nombre:x.w.ref,poligono_mm:P(rdpClosed(pl,0.03)),sin_cobre:['F.Cu','B.Cu'],abrir_mascara:x.w.mask?['F.Mask','B.Mask']:[],quitar_serigrafia:!x.w.silk,ilumina:d.comps.filter(c=>(c.kind==='led'||c.kind==='rgb')&&c.side==='B'&&winHit(x.w,c.x,c.y)).map(c=>c.ref)}))),
     control:{mcu:d.mcuId,lcsc:M?M.lcsc:null,elegido:d.mcuAuto?'auto':'manual',patas_usadas:d.pinsReq,programacion:d.needMCU?M.prog:null},
     energia:{tipo:d.bk,lcsc:B.lcsc||null,usb_c:!!B.usb,interruptor:!!B.usb||d.comps.some(c=>c.kind==='button'&&c.action==='onoff'),autonomia_min:d.minutes!=null?r3(d.minutes):(d.hours===Infinity?null:r3(d.hours*60))},
     piezas_fijas:fixed,piezas_libres:free,senales:sen,reglas:{fab:'jlcpcb',pista_min_mm:d.tw.sig,separacion_mm:0.2},
@@ -1209,13 +1259,26 @@ function makeKicad(){ const d=D,P=outlinePts(); const X=x=>r3(x+OX),Y=y=>r3(y+OY
 `    for (x1, y1), (x2, y2) in zip(points, points[1:]):`,
 `        t = pcbnew.PCB_TRACK(board); t.SetStart(V(x1, y1)); t.SetEnd(V(x2, y2))`,
 `        t.SetWidth(mm(width)); t.SetLayer(layer); t.SetNet(net(netname)); board.Add(t)`,
+`def keepout(points, mask=True):`,
+`    z = pcbnew.ZONE(board); z.SetIsRuleArea(True)`,
+`    z.SetDoNotAllowTracks(True); z.SetDoNotAllowVias(True); z.SetDoNotAllowCopperPour(True)`,
+`    z.SetDoNotAllowPads(False); z.SetDoNotAllowFootprints(False)`,
+`    ls = pcbnew.LSET(); ls.AddLayer(pcbnew.F_Cu); ls.AddLayer(pcbnew.B_Cu); z.SetLayerSet(ls)`,
+`    o = z.Outline(); o.NewOutline()`,
+`    for x, y in points: o.Append(mm(x), mm(y))`,
+`    board.Add(z)`,
+`    if mask:`,
+`        for layer in (pcbnew.F_Mask, pcbnew.B_Mask):`,
+`            s = pcbnew.PCB_SHAPE(board); s.SetShape(pcbnew.SHAPE_T_POLY); s.SetPolyPoints([V(x, y) for x, y in points])`,
+`            s.SetLayer(layer); s.SetFilled(True); s.SetWidth(0); board.Add(s)`,
 `def via(x, y, netname):`,
 `    v = pcbnew.PCB_VIA(board); v.SetPosition(V(x, y)); v.SetDrill(mm(0.4)); v.SetWidth(mm(0.8)); v.SetNet(net(netname)); board.Add(v)`,
 ``,`# Contorno`,`outline([${P.map(p=>`(${X(p[0])}, ${Y(p[1])})`).join(', ')}])`);
   d.holes.forEach(h=>L.push(`hole(${X(h.x)}, ${Y(h.y)}, ${h.d})`));
-  L.push('','# Componentes del frente');
-  d.comps.forEach(c=>{ if(c.kind==='led') L.push(`place('${LED_PKGS[c.pkg].fp}', '${c.ref}', 'LED ${LED_COLORS[c.color].label}', ${X(c.x)}, ${Y(c.y)})`);
-    if(c.kind==='rgb') L.push(`place('LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm', '${c.ref}', 'WS2812B-2020', ${X(c.x)}, ${Y(c.y)})`);
+  const WPk=winPolys(d); if(WPk.length){ L.push('','# Ventanas translúcidas: sin cobre en ambas caras (área prohibida) y sin máscara, para la luz de los LEDs del reverso'); WPk.forEach(x=>x.polys.forEach(pl=>L.push(`keepout([${rdpClosed(pl,0.03).map(p=>`(${X(p[0])}, ${Y(p[1])})`).join(', ')}], mask=${x.w.mask?'True':'False'})  # ${x.w.ref}`))); }
+  L.push('','# Componentes del frente (y LEDs de montaje inverso en el reverso)');
+  d.comps.forEach(c=>{ if(c.kind==='led') L.push(`place('${LED_PKGS[c.pkg].fp}', '${c.ref}', 'LED ${LED_COLORS[c.color].label}${c.side==='B'?' montaje inverso':''}', ${X(c.x)}, ${Y(c.y)}${c.side==='B'?', back=True':''})`);
+    if(c.kind==='rgb') L.push(c.side==='B'?`place('LED_SMD:LED_SK6812MINI-E_PLCC4_3.2x2.8mm', '${c.ref}', 'SK6812MINI-E', ${X(c.x)}, ${Y(c.y)}, back=True)`:`place('LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm', '${c.ref}', 'WS2812B-2020', ${X(c.x)}, ${Y(c.y)})`);
     if(c.kind==='touch') L.push(`place('TestPoint:TestPoint_Pad_D4.0mm', '${c.ref}', 'Toque', ${X(c.x)}, ${Y(c.y)})`);
     if(c.kind==='button') L.push(`place('Button_Switch_SMD:SW_SPST_PTS810', '${c.ref}', 'Pulsador', ${X(c.x)}, ${Y(c.y)}, back=True)`);
     if(c.kind==='termo') L.push(`# ${c.ref}: zona termocrómica ${r3(c.zone.w)} x ${r3(c.zone.h)} mm en (${X(c.zone.x)}, ${Y(c.zone.y)}); pintar sobre cobre expuesto (abrir F.Mask).`); });
@@ -1304,8 +1367,9 @@ function paintArt(g,geo,member,dirty){
   }); g.polarity('D'); }
 function collectPads(d){ const P=[]; const R=(x,y,w,h,layer,ex)=>P.push(Object.assign({shape:'R',x,y,w,h,layer},ex||{})); const C=(x,y,dd,layer,ex)=>P.push(Object.assign({shape:'C',x,y,d:dd,layer},ex||{}));
   d.comps.forEach(c=>{
-    if(c.kind==='led'){ const pk=LED_PKGS[c.pkg]; if(pk.tht){ C(c.x-1.27,c.y,1.8,'both',{drill:0.9}); C(c.x+1.27,c.y,1.8,'both',{drill:0.9}); } else { const big=pk.w>3, pw=big?1.15:1.0, ph=big?1.8:1.4, off=big?1.475:0.95; R(c.x-off,c.y,pw,ph,'F'); R(c.x+off,c.y,pw,ph,'F'); } }
-    if(c.kind==='rgb') [[-0.6,-0.55],[0.6,-0.55],[-0.6,0.55],[0.6,0.55]].forEach(([dx,dy])=>R(c.x+dx,c.y+dy,0.7,0.6,'F'));
+    const L=c.side==='B'?'B':'F';
+    if(c.kind==='led'){ const pk=LED_PKGS[c.pkg]; if(pk.tht){ C(c.x-1.27,c.y,1.8,'both',{drill:0.9}); C(c.x+1.27,c.y,1.8,'both',{drill:0.9}); } else { const big=pk.w>3, pw=big?1.15:1.0, ph=big?1.8:1.4, off=big?1.475:0.95; R(c.x-off,c.y,pw,ph,L); R(c.x+off,c.y,pw,ph,L); } }
+    if(c.kind==='rgb') (c.side==='B'?[[-1.5,-0.7],[1.5,-0.7],[-1.5,0.7],[1.5,0.7]]:[[-0.6,-0.55],[0.6,-0.55],[-0.6,0.55],[0.6,0.55]]).forEach(([dx,dy])=>R(c.x+dx,c.y+dy,c.side==='B'?0.8:0.7,0.6,L));
     if(c.kind==='touch') C(c.x,c.y,(S.product==='badge'?3.6:2.6)*2,'F');
     if(c.kind==='button') [[-2.1,-1.2],[2.1,-1.2],[-2.1,1.2],[2.1,1.2]].forEach(([dx,dy])=>R(c.x+dx,c.y+dy,1.0,0.8,'B'));
   });
@@ -1338,25 +1402,27 @@ function generateGerbers(){
   const termo=d.comps.filter(c=>c.kind==='termo');
   const termoDraw=(g,grow)=>termo.forEach(c=>{ const a=c.el!=null?geo.find(x=>x.e.i===c.el):null; if(a) a.contours.forEach((ct,i)=>{ if(!a.holes.has(i)) g.region(ct); }); else g.flashC(c.x,c.y,10+grow); });
   const serp=(g,grow)=>termo.filter(c=>c.serp).forEach(c=>g.line(c.serp.pts,d.tw.heat+grow));
+  const WP=winPolys(d); const winDraw=(g,pred)=>WP.filter(x=>!pred||pred(x.w)).forEach(x=>x.polys.forEach(pl=>g.region(pl)));
+  const clearWins=g=>{ if(!WP.length) return; g.polarity('C'); winDraw(g); g.polarity('D'); };
   if(ART.mode==='layers'){ const has=sl=>geo.some(a=>a.e.slot===sl); const bs=mk('Legend,Bot'), tp=mk('Paste,Top'), bp=mk('Paste,Bot');
-    paintSlot(fcu,geo,'cu-top'); termoDraw(fcu,0); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0));
-    paintSlot(bcu,geo,'cu-bottom'); d.tracksB.forEach(t=>bcu.line(t.pts,t.w)); serp(bcu,0); bP.forEach(p=>flash(bcu,p,0));
-    paintSlot(fm,geo,'sm-top'); termoDraw(fm,0.2); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
-    paintSlot(bm,geo,'sm-bottom'); bP.filter(p=>!p.via).forEach(p=>flash(bm,p,0.1));
-    paintSlot(fs,geo,'ss-top'); fs.polarity('C'); termoDraw(fs,0.4); fs.polarity('D'); paintSlot(bs,geo,'ss-bottom'); paintSlot(tp,geo,'sp-top'); paintSlot(bp,geo,'sp-bottom');
+    paintSlot(fcu,geo,'cu-top'); termoDraw(fcu,0); clearWins(fcu); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0));
+    paintSlot(bcu,geo,'cu-bottom'); clearWins(bcu); d.tracksB.forEach(t=>bcu.line(t.pts,t.w)); serp(bcu,0); bP.forEach(p=>flash(bcu,p,0));
+    paintSlot(fm,geo,'sm-top'); termoDraw(fm,0.2); winDraw(fm,w=>w.mask); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
+    paintSlot(bm,geo,'sm-bottom'); winDraw(bm,w=>w.mask); bP.filter(p=>!p.via).forEach(p=>flash(bm,p,0.1));
+    paintSlot(fs,geo,'ss-top'); fs.polarity('C'); termoDraw(fs,0.4); winDraw(fs,w=>!w.silk); fs.polarity('D'); paintSlot(bs,geo,'ss-bottom'); paintSlot(tp,geo,'sp-top'); paintSlot(bp,geo,'sp-bottom');
     if(has('outline')) geo.filter(a=>a.e.slot==='outline').forEach(a=>a.contours.forEach(c=>edge.line(c,0.1,a.closed))); else edge.line(poly,0.1,true);
     const extra=[]; geo.filter(a=>a.e.slot==='drill').forEach(a=>a.contours.forEach(c=>{ const xs=c.map(p=>p[0]),ys=c.map(p=>p[1]); const w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys); if(w>0.05&&h>0.05) extra.push({x:(Math.max(...xs)+Math.min(...xs))/2,y:(Math.max(...ys)+Math.min(...ys))/2,d:r3(Math.min(w,h))}); }));
     const files=[{filename:`${pre}-F_Cu.gtl`,gerber:fcu.toString()},{filename:`${pre}-B_Cu.gbl`,gerber:bcu.toString()},{filename:`${pre}-F_Mask.gts`,gerber:fm.toString()},{filename:`${pre}-B_Mask.gbs`,gerber:bm.toString()},{filename:`${pre}-F_Silkscreen.gto`,gerber:fs.toString()}];
     if(has('ss-bottom')) files.push({filename:`${pre}-B_Silkscreen.gbo`,gerber:bs.toString()}); if(has('sp-top')) files.push({filename:`${pre}-F_Paste.gtp`,gerber:tp.toString()}); if(has('sp-bottom')) files.push({filename:`${pre}-B_Paste.gbp`,gerber:bp.toString()});
     files.push({filename:`${pre}-Edge_Cuts.gm1`,gerber:edge.toString()},{filename:`${pre}.drl`,gerber:makeDrill(d,pads,extra)});
     GERBERS={files,fab,mask:S.mask,skippedText:geo.skippedText,stamp:Date.now()}; return GERBERS; }
-  if(fab){ paintArt(fcu,geo,mid,false); termoDraw(fcu,0); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0)); }
-  else { fcu.region(poly); paintArt(fcu,geo,notDark,true); fcu.polarity('C'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w+2*iso)); fP.forEach(p=>flash(fcu,p,2*iso)); fcu.polarity('D'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0)); }
+  if(fab){ paintArt(fcu,geo,mid,false); termoDraw(fcu,0); clearWins(fcu); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0)); }
+  else { fcu.region(poly); paintArt(fcu,geo,notDark,true); clearWins(fcu); fcu.polarity('C'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w+2*iso)); fP.forEach(p=>flash(fcu,p,2*iso)); fcu.polarity('D'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0)); }
   if(!fab){ bcu.region(poly); bcu.polarity('C'); d.tracksB.forEach(t=>bcu.line(t.pts,t.w+2*iso)); serp(bcu,2*iso); bP.forEach(p=>flash(bcu,p,2*iso)); bcu.polarity('D'); }
-  d.tracksB.forEach(t=>bcu.line(t.pts,t.w)); serp(bcu,0); bP.forEach(p=>flash(bcu,p,0));
-  if(fab){ paintArt(fm,geo,mid,false); termoDraw(fm,0.2); d.tracksF.forEach(t=>fm.line(t.pts,t.w+0.1)); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
+  clearWins(bcu); d.tracksB.forEach(t=>bcu.line(t.pts,t.w)); serp(bcu,0); bP.forEach(p=>flash(bcu,p,0));
+  if(fab){ paintArt(fm,geo,mid,false); termoDraw(fm,0.2); winDraw(fm,w=>w.mask); winDraw(bm,w=>w.mask); d.tracksF.forEach(t=>fm.line(t.pts,t.w+0.1)); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
     bP.filter(p=>!p.via).forEach(p=>flash(bm,p,0.1));
-    paintArt(fs,geo,light,false); fs.polarity('C'); termoDraw(fs,0.4); fP.forEach(p=>flash(fs,p,0.3)); fs.polarity('D'); }
+    paintArt(fs,geo,light,false); fs.polarity('C'); termoDraw(fs,0.4); winDraw(fs,w=>!w.silk); fP.forEach(p=>flash(fs,p,0.3)); fs.polarity('D'); }
   else { fm.region(poly); bm.region(poly); }
   edge.line(poly,0.1,true);
   const files=[{filename:`${pre}-F_Cu.gtl`,gerber:fcu.toString()},{filename:`${pre}-B_Cu.gbl`,gerber:bcu.toString()},{filename:`${pre}-F_Mask.gts`,gerber:fm.toString()},{filename:`${pre}-B_Mask.gbs`,gerber:bm.toString()}];

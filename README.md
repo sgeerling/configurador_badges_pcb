@@ -83,3 +83,13 @@ círculo punteado: se arrastra o se escriben sus coordenadas X/Y en el panel. La
 de sujeción, entra al deshacer/rehacer y se usa en todas las exportaciones. «Posición automática» la devuelve a su
 lugar calculado. Si queda fuera de la placa o pegada al borde, aparece un bloqueo en «Revisiones antes de fabricar».
 En el pedido para KiCad, las sujeciones movidas a mano van con `posicion_mm` y Copper las deja ahí.
+
+## LEDs en el reverso y ventanas translúcidas
+
+Los LEDs (y los LEDs de colores) pueden ir en la **cara reverso**: se usan piezas de montaje inverso (LED 1206 de
+montaje inverso, SK6812MINI-E) que iluminan hacia la placa. Su luz se ve por delante a través de una
+**ventana translúcida**: una zona sin cobre en ninguna cara y, por defecto, sin máscara, donde la fibra de vidrio FR4
+queda a la vista y difunde la luz. La ventana puede ser la silueta de una forma del dibujo o un círculo (Ø6 a 22 mm).
+Al poner un LED en el reverso sin ventana encima, se agrega una de Ø8 mm. Las revisiones avisan si un LED del reverso
+no tiene ventana, si una pista o una pieza del reverso queda detrás, o si la ventana pisa una zona termocrómica.
+Gerber, script de KiCad (áreas prohibidas + aberturas de máscara), JSON y pedido (`ventanas`) incluyen las ventanas.
