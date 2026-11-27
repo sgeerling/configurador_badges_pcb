@@ -563,7 +563,11 @@ function sanitizeAndLoad(text,name){
   if(!doc||doc.querySelector('parsererror')||doc.documentElement.nodeName.toLowerCase()!=='svg'){toast('Ese archivo no parece un SVG válido. Expórtalo de nuevo como SVG simple.');return false;}
   const root=doc.documentElement; let dropped=0;
   root.querySelectorAll('script,foreignObject,iframe,image,audio,video,a').forEach(n=>{ if(n.nodeName==='a'){while(n.firstChild)n.parentNode.insertBefore(n.firstChild,n); n.remove();} else {dropped++; n.remove();}});
-  root.querySelectorAll('*').forEach(n=>{[...n.attributes].forEach(a=>{const k=a.name.toLowerCase(); if(k.startsWith('on')) n.removeAttribute(a.name); if((k==='href'||k==='xlink:href')&&!a.value.startsWith('#')) n.removeAttribute(a.name);});});
+  /* metadatos de editores (Inkscape: sodipodi:, inkscape:; Illustrator: i:, x:…): fuera del espacio SVG. Si quedan, la copia
+     que se rasteriza para trazar la silueta es XML inválido y la placa cae al rectángulo. */
+  [...root.querySelectorAll('*')].forEach(n=>{ if(n.namespaceURI!==NS) n.remove(); });
+  root.querySelectorAll('metadata,title,desc').forEach(n=>n.remove());
+  root.querySelectorAll('*').forEach(n=>{[...n.attributes].forEach(a=>{const k=a.name.toLowerCase(); if(k.startsWith('on')) n.removeAttribute(a.name); if((k==='href'||k==='xlink:href')&&!a.value.startsWith('#')) n.removeAttribute(a.name); if(k.includes(':')&&!/^(xlink|xml):/.test(k)) n.removeAttribute(a.name);});});
   const raw=$('#artRaw'); raw.innerHTML=''; ['fill','stroke','stroke-width','fill-rule'].forEach(k=>{raw.removeAttribute(k); if(root.getAttribute(k)) raw.setAttribute(k,root.getAttribute(k));});
   [...root.childNodes].forEach(ch=>raw.appendChild(document.importNode(ch,true)));
   $('#artLayer').style.visibility='visible'; $('#artT').removeAttribute('transform'); raw.style.color='#000';
@@ -1171,6 +1175,12 @@ function makeJSON(){ const d=D; const comp=c=>{const o={ref:c.ref,tipo:c.kind,x_
     vias:d.vias.map(v=>({x_mm:r3(v.x),y_mm:r3(v.y),red:v.net})),revisiones:d.warns.map(w=>({nivel:w.lv,texto:w.t}))},null,2); }
 /* ---------- Pedido para KiCad (Copper) ---------- */
 function pedidoSlug(){ return (S.artName||'badge').replace(/\.[a-z0-9]+$/i,'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')||'badge'; }
+/* La silueta se traza en segundo plano (~0,2 s tras cargar o cambiar medida/margen). Lo que exporta el contorno la espera. */
+function outlinePending(){ return S.outline==='silueta'&&!!ART.vb&&!GEO.poly&&!GEO.polyNote; }
+async function outlineReady(ms){ render(); const t0=Date.now(); while(outlinePending()&&Date.now()-t0<(ms||8000)) await new Promise(r=>setTimeout(r,60)); }
+/* artGeometry y la silueta necesitan la mesa dibujada: si la vista del configurador está oculta, se muestra invisible un momento. */
+async function withConfigDrawn(fn){ const v=$('#viewConfig'); if(!v.hidden) return fn(); v.hidden=false; v.style.visibility='hidden'; v.style.position='absolute';
+  try{ return await fn(); } finally{ v.hidden=true; v.style.visibility=''; v.style.position=''; } }
 function pedidoBlockers(){ render(); const bl=D.warns.filter(w=>w.lv==='crit').map(w=>w.t);
   if(S.outline==='silueta'&&!GEO.poly){ bl.push('La silueta de la placa aún se está calculando: espera un segundo.'); clearTimeout(pedidoBlockers.t); pedidoBlockers.t=setTimeout(()=>{ if(!$('#modal').hidden&&curExp==='pedido') renderModal(); },500); }
   return bl; }
@@ -1310,7 +1320,10 @@ function closeModal(){ $('#modal').hidden=true; $('#btnExport').focus(); }
 function renderModal(){ const x=EXPORTS[curExp];
   $('#mTabs').innerHTML=Object.entries(EXPORTS).map(([k,v])=>`<button role="tab" data-x="${k}" aria-selected="${k===curExp}">${v.label}</button>`).join('');
   $('#mGuide').textContent=x.guide;
-  const fab=S.fab==='fab'; if(curExp==='gerber'){ const g=generateGerbers(); $('#mExtra').innerHTML=`<label class="field" style="min-width:260px"><span>Archivo</span><select id="gbSel">${g.files.map((f,i)=>`<option value="${i}" ${i===gbSel?'selected':''}>${f.filename}</option>`).join('')}</select></label>`; $('#mFile').textContent=g.files[clamp(gbSel,0,g.files.length-1)].filename; $('#mText').value=makeGerberTab(); $('#mSave').hidden=true; return; }
+  const fab=S.fab==='fab';
+  if(['gerber','kicad','dxf','outline','json'].includes(curExp)&&outlinePending()){ $('#mExtra').innerHTML='<div class="note">Calculando la silueta de la placa: el contorno estará listo en un momento.</div>'; $('#mFile').textContent=x.file||''; $('#mText').value=''; $('#mText').hidden=true; $('#mSave').hidden=true; $('#mCopy').hidden=true;
+    clearTimeout(renderModal.t); renderModal.t=setTimeout(()=>{ if(!$('#modal').hidden) renderModal(); },250); return; }
+  if(curExp==='gerber'){ $('#mText').hidden=false; $('#mCopy').hidden=false; const g=generateGerbers(); $('#mExtra').innerHTML=`<label class="field" style="min-width:260px"><span>Archivo</span><select id="gbSel">${g.files.map((f,i)=>`<option value="${i}" ${i===gbSel?'selected':''}>${f.filename}</option>`).join('')}</select></label>`; $('#mFile').textContent=g.files[clamp(gbSel,0,g.files.length-1)].filename; $('#mText').value=makeGerberTab(); $('#mSave').hidden=true; return; }
   $('#mExtra').innerHTML=curExp==='art'?`<label class="field" style="min-width:240px"><span>Capa</span><select id="artSel">${(fab?[['silk','Serigrafía (tonos claros)'],['cobre','Cobre expuesto dorado (tonos medios)'],['mascara','Máscara (tonos oscuros)']]:[['brillante','Cobre brillante (claros)'],['patina','Pátina con láser (medios)'],['fresado','Fresado hasta la fibra (oscuros)']]).map(([v,l])=>`<option value="${v}" ${v===artLayerSel?'selected':''}>${l}</option>`).join('')}</select></label>`:'';
   const file=curExp==='art'?`arte_${artLayerSel}.svg`:x.file; $('#mFile').textContent=file;
   $('#mCopy').hidden=false; $('#mText').hidden=false;
@@ -1431,7 +1444,8 @@ function generateGerbers(){
   GERBERS={files,fab,mask:S.mask,skippedText:geo.skippedText,stamp:Date.now()}; return GERBERS; }
 
 /* ---------- ZIP de fabricación ---------- */
-async function buildZip(){ if(typeof JSZip==='undefined') throw new Error('JSZip no cargó'); const g=generateGerbers(); const z=new JSZip(); const f=z.folder('gerber');
+async function buildZip(){ if(typeof JSZip==='undefined') throw new Error('JSZip no cargó'); return withConfigDrawn(()=>buildZipNow()); }
+async function buildZipNow(){ await outlineReady(); const g=generateGerbers(); const z=new JSZip(); const f=z.folder('gerber');
   g.files.forEach(x=>f.file(x.filename,x.gerber));
   z.file(`${S.product}_kicad.py`,makeKicad()); z.file('contorno.dxf',makeDXF()); z.file('contorno.svg',makeOutlineSVG()); z.file('proyecto.json',makeJSON()); z.file('materiales.csv',makeBOM());
   const keep=artLayerSel; const layers=S.fab==='fab'?['silk','cobre','mascara']:['brillante','patina','fresado']; layers.forEach(l=>{artLayerSel=l; z.file(`arte_${l}.svg`,makeArt());}); artLayerSel=keep;
@@ -1458,7 +1472,8 @@ function gvShow(){ setSeg('gvView',GV.view); const box=$('#gvInner'); box.classN
   gvFit(); }
 function gvApply(){ $('#gvInner').style.transform=`translate(${GV.x}px,${GV.y}px) scale(${GV.k})`; }
 function gvFit(){ GV.k=1; GV.x=0; GV.y=0; gvApply(); }
-async function gvFromDesign(){ GV.src='design'; setSeg('gvSrc','design'); GV.warn=[]; $('#gvWarn').innerHTML=''; const g=generateGerbers(); if(!g) return; GV.files=g.files.slice(); GV.off.clear();
+async function gvFromDesign(){ GV.src='design'; setSeg('gvSrc','design'); GV.warn=[]; $('#gvWarn').innerHTML=''; if(outlinePending()) gvStatus('Calculando la silueta de la placa…');
+  const g=await withConfigDrawn(async()=>{ await outlineReady(); return generateGerbers(); }); if(!g) return; GV.files=g.files.slice(); GV.off.clear();
   $('#gvSrcNote').textContent=`Generados ahora desde tu diseño (${S.fab==='fab'?'PCB de fábrica':'fresado en Z1'}). Las huellas son aproximadas; para pedir a fábrica usa los Gerber de KiCad.`+(g.skippedText?` Se omitieron ${g.skippedText} texto(s): conviértelos a trazados.`:'');
   await gvRender(); }
 const GERBER_EXT=/\.(gbr|ger|pho|art|gtl|gbl|gts|gbs|gto|gbo|gtp|gbp|gko|gm\d*|gml|gg\d|gd\d|g\d+|gp\d|drl|xln|exc|ncd|nc|drd|tap|cmp|sol|stc|sts|plc|pls|crc|crs|oln|out|dri|txt)$/i;
