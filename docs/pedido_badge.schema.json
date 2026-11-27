@@ -525,6 +525,22 @@
             "items": {
               "type": "string"
             }
+          },
+          "huecos_mm": {
+            "type": "array",
+            "description": "Islas claras dentro de la ventana (p. ej. el brillo de un ojo): conservan su arte.",
+            "items": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
           }
         }
       }

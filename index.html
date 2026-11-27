@@ -479,7 +479,7 @@ const OWL=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 232">
 const S={product:'badge',size:80,mount:0,outline:'silueta',margin:2.5,fab:'fab',mask:'negro',battery:'auto',view:'front',look:'pcb',traces:true,
   tool:'select',opt:{pkg:'s1206',color:'rojo',beh:'respiracion',rgbBeh:'arcoiris',pigment:'azul-rosa',act:'tacto',heater:'smd',action:'modo',side:'F'},
   comps:[],sel:null,sim:false,artName:'',layerFiles:[],mcu:'auto',mountPos:{}};
-const ART={id:0,vb:null,els:[],mode:'single',board:null,boardBox:null};
+const ART={id:0,vb:null,els:[],mode:'single',board:null,boardBox:null,regions:null};
 const GEO={W:60,H:60,s:1,ox:0,oy:0,poly:null,polyArea:0,centroid:null,silNode:null,islands:false,polyNote:''};
 let UID=1, D=null;
 /* ---------- Historial (deshacer / rehacer) ---------- */
@@ -571,7 +571,7 @@ function sanitizeAndLoad(text,name){
   const raw=$('#artRaw'); raw.innerHTML=''; ['fill','stroke','stroke-width','fill-rule'].forEach(k=>{raw.removeAttribute(k); if(root.getAttribute(k)) raw.setAttribute(k,root.getAttribute(k));});
   [...root.childNodes].forEach(ch=>raw.appendChild(document.importNode(ch,true)));
   $('#artLayer').style.visibility='visible'; $('#artT').removeAttribute('transform'); raw.style.color='#000';
-  if(!finishArt(name,dropped)) return false; ART.mode='single'; ART.board=null; S.layerFiles=[]; if(S.outline==='archivo') S.outline='silueta'; histRecordArt({mode:'single',name,text}); return true;
+  if(!finishArt(name,dropped)) return false; computeRegions(); ART.mode='single'; ART.board=null; S.layerFiles=[]; if(S.outline==='archivo') S.outline='silueta'; histRecordArt({mode:'single',name,text}); return true;
 }
 function finishArt(name,dropped){ const raw=$('#artRaw');
   // capturar estilos calculados y dejarlos como atributos
@@ -620,36 +620,67 @@ function addComp(kind,p,elIdx){
   if(kind==='termo'&&elIdx!=null) c.el=elIdx;
   if(kind==='led') Object.assign(c,{pkg:o.pkg,color:o.color,beh:o.beh,side:o.side||'F'});
   if(kind==='rgb') Object.assign(c,{beh:o.rgbBeh,side:o.side||'F'});
-  if(kind==='win'){ if(elIdx==null||!winOk(ART.els[elIdx])){ toast('Las ventanas se eligen entre las formas negras y cerradas del dibujo (marcadas en amarillo).'); return null; }
-    if(S.comps.some(x=>x.kind==='win'&&x.el===elIdx)){ toast('Esa forma ya es una ventana.'); return null; } c.el=elIdx; Object.assign(c,{mask:true,silk:false}); }
+  if(kind==='win'){ if(!ART.regions){ toast('Estoy analizando las superficies del dibujo: prueba en un segundo.'); return null; }
+    const hit=winCandidates().filter(r=>inRegion(p.x,p.y,r.outer,r.holes)).sort((a,b)=>a.area-b.area)[0];
+    if(!hit){ toast('Las ventanas se eligen entre las superficies negras cerradas del dibujo (marcadas en amarillo).'); return null; }
+    const ctr={x:GEO.ox+(hit.src.cx-ART.vb.x)*GEO.s,y:GEO.oy+(hit.src.cy-ART.vb.y)*GEO.s};
+    if(S.comps.some(x=>x.kind==='win'&&x.region&&Math.hypot(x.region.cx-hit.src.cx,x.region.cy-hit.src.cy)<1e-6)){ toast('Esa superficie ya es una ventana.'); return null; }
+    Object.assign(c,{u:ctr.x/GEO.W,v:ctr.y/GEO.H,region:JSON.parse(JSON.stringify(hit.src)),mask:true,silk:false}); }
   if(kind==='termo'){ if(c.el==null&&elIdx==null){} Object.assign(c,{pigment:o.pigment,act:o.act,heater:o.heater}); }
   if(kind==='button') Object.assign(c,{action:o.action});
   S.comps.push(c); S.sel=c.id; return c;
 }
 /* ---------- Ventanas translúcidas: zonas sin cobre para que la luz de un LED del reverso atraviese la fibra ---------- */
-function winHit(w,x,y){ if(w.el!=null&&ART.els[w.el]){ const n=ART.els[w.el].node, b=elMM(ART.els[w.el]);
-    if(x<b.x||x>b.x+b.w||y<b.y||y>b.y+b.h) return false;
-    try{ const wm=world.getScreenCTM(), nm=n.getScreenCTM(); if(wm&&nm&&n.isPointInFill){ const q=new DOMPoint(x,y).matrixTransform(wm).matrixTransform(nm.inverse()); return n.isPointInFill(new DOMPoint(q.x,q.y)); } }catch(e){}
-    return true; }
-  return false; }
-/* Formas que pueden ser ventana: rellenas de negro (o casi) y cerradas, del mismo SVG importado */
-function closedShape(e){ const t=e.tag; if(['circle','ellipse','rect','polygon'].includes(t)) return true;
-  if(t!=='path') return false; const dd=(e.node.getAttribute('d')||'').trim(); if(!dd) return false;
-  const subs=dd.split(/(?=[Mm])/).map(x=>x.trim()).filter(Boolean); return subs.length>0&&subs.every(x=>/[Zz]\s*$/.test(x)); }
-function winOk(e){ return !!e&&e.tag!=='text'&&e.fill&&e.fill!=='none'&&e.fill!=='url'&&lum(e.fill)<0.3&&closedShape(e); }
-function winCandidates(){ return ART.els.filter(e=>winOk(e)&&isFrontEl(e)); }
-function winPolys(d){ const W=d.comps.filter(c=>c.kind==='win'); if(!W.length) return [];
-  let geo=null; if(W.some(w=>w.el!=null)){ setLayerVis('all'); geo=artGeometry(); setLayerVis(S.view); }
-  return W.map(w=>{ let polys=[]; const a=w.el!=null&&geo?geo.find(x=>x.e.i===w.el):null;
-    if(a) polys=a.contours.filter((ct,k)=>!a.holes.has(k)&&ct.length>2);
-    return {w,polys}; }).filter(x=>x.polys.length); }
+function winHit(w,x,y){ const m=winMM(w); return !!m&&inRegion(x,y,m.outer,m.holes); }
+/* Superficies negras visibles del dibujo: se rasteriza el arte con sus colores originales y cada zona negra conectada
+   es una superficie (aunque venga de un hueco en una forma blanca). Se guardan en unidades del SVG. */
+async function computeRegions(){ const id=ART.id; ART.regions=null; if(ART.mode==='layers'||!ART.vb){ ART.regions=[]; return; }
+  try{ const vb=ART.vb, k=Math.min(14,1400/Math.max(vb.w,vb.h)*1), pad=2, pw=Math.ceil(vb.w*k)+2*pad, ph=Math.ceil(vb.h*k)+2*pad;
+    const svg=document.createElementNS(NS,'svg'); svg.setAttribute('width',pw); svg.setAttribute('height',ph); svg.setAttribute('viewBox',`${vb.x-pad/k} ${vb.y-pad/k} ${pw/k} ${ph/k}`);
+    const raw=$('#artRaw'); ['fill','stroke','stroke-width','fill-rule'].forEach(a=>{ if(raw.getAttribute(a)) svg.setAttribute(a,raw.getAttribute(a)); });
+    [...raw.childNodes].forEach(n=>svg.appendChild(n.cloneNode(true)));
+    svg.querySelectorAll('*').forEach(n=>{ n.removeAttribute('filter'); n.removeAttribute('style'); if(n.dataset&&n.dataset.f!==undefined){ n.setAttribute('fill',n.dataset.f==='url'?'#888':n.dataset.f); n.setAttribute('stroke',n.dataset.s==='url'?'#888':n.dataset.s); n.setAttribute('stroke-width',n.dataset.sw||1); } });
+    const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml'})); const img=new Image();
+    await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=url;});
+    const cv=document.createElement('canvas'); cv.width=pw; cv.height=ph; const cx=cv.getContext('2d'); cx.drawImage(img,0,0); URL.revokeObjectURL(url);
+    const px=cx.getImageData(0,0,pw,ph).data, N=pw*ph, dark=new Uint8Array(N);
+    for(let i=0;i<N;i++){ const a=px[i*4+3]; if(a>127){ const L=(0.2126*px[i*4]+0.7152*px[i*4+1]+0.0722*px[i*4+2])/255; if(L<0.3) dark[i]=1; } }
+    if(id!==ART.id) return;
+    const lab=new Int32Array(N), out=[]; let nl=0; const st=new Int32Array(N);
+    const toSvg=([x,y])=>[r3(vb.x+(x+0.5-pad)/k),r3(vb.y+(y+0.5-pad)/k)];
+    const minPx=Math.max(12,0.0004*N);
+    for(let i=0;i<N;i++){ if(!dark[i]||lab[i]) continue; nl++; let sp=0, cnt=0, x0=pw,y0=ph,x1=0,y1=0; st[sp++]=i; lab[i]=nl;
+      while(sp){ const j=st[--sp]; cnt++; const x=j%pw,y=(j-x)/pw; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+        for(const q of [j-1,j+1,j-pw,j+pw]){ if(q<0||q>=N) continue; if((q===j-1&&x===0)||(q===j+1&&x===pw-1)) continue; if(dark[q]&&!lab[q]){ lab[q]=nl; st[sp++]=q; } } }
+      if(cnt<minPx) continue;
+      const bw=x1-x0+3, bh=y1-y0+3, g=new Uint8Array(bw*bh); for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(lab[y*pw+x]===nl) g[(y-y0+1)*bw+(x-x0+1)]=1;
+      const tr=pts=>rdpClosed(pts.map(([x,y])=>toSvg([x+x0-1,y+y0-1])),0.7/k);
+      const o=moore(g,bw,bh); if(o.length<4) continue; o.pop();
+      // huecos: lo que no es la superficie y no se alcanza desde el borde de su caja
+      const seen=new Uint8Array(bw*bh); let sp2=0; for(let x=0;x<bw;x++){ st[sp2++]=x; st[sp2++]=(bh-1)*bw+x; } for(let y=0;y<bh;y++){ st[sp2++]=y*bw; st[sp2++]=y*bw+bw-1; }
+      while(sp2){ const j=st[--sp2]; if(seen[j]||g[j]) continue; seen[j]=1; const x=j%bw; if(x>0) st[sp2++]=j-1; if(x<bw-1) st[sp2++]=j+1; if(j>=bw) st[sp2++]=j-bw; if(j<bw*(bh-1)) st[sp2++]=j+bw; }
+      const holes=[], hl=new Uint8Array(bw*bh);
+      for(let j=0;j<bw*bh;j++){ if(g[j]||seen[j]||hl[j]) continue; const hg=new Uint8Array(bw*bh); let sp3=0,hc=0; st[sp3++]=j; hl[j]=1;
+        while(sp3){ const q=st[--sp3]; hg[q]=1; hc++; const x=q%bw; for(const r of [x>0?q-1:-1,x<bw-1?q+1:-1,q-bw,q+bw]){ if(r<0||r>=bw*bh||g[r]||hl[r]) continue; hl[r]=1; st[sp3++]=r; } }
+        if(hc<6) continue; const hp=moore(hg,bw,bh); if(hp.length>=4){ hp.pop(); holes.push(tr(hp)); } }
+      const outer=tr(o); const area=Math.abs(polyArea(outer))-holes.reduce((a,h)=>a+Math.abs(polyArea(h)),0); const c=polyCentroid(outer);
+      out.push({outer,holes,area,cx:c[0],cy:c[1]}); }
+    out.sort((a,b)=>b.area-a.area); ART.regions=out;
+  }catch(e){ ART.regions=[]; }
+  if(id===ART.id) render(); }
+const regToMM=pts=>pts.map(([x,y])=>[GEO.ox+(x-ART.vb.x)*GEO.s,GEO.oy+(y-ART.vb.y)*GEO.s]);
+function winCandidates(){ if(!ART.regions||!ART.vb) return []; const s2=GEO.s*GEO.s;
+  return ART.regions.map((r,i)=>({i,src:r,outer:regToMM(r.outer),holes:r.holes.map(regToMM),area:r.area*s2})).filter(c=>c.area>=0.5); }
+function inRegion(x,y,outer,holes){ return pointInPoly(x,y,outer)&&!holes.some(h=>pointInPoly(x,y,h)); }
+function winMM(w){ return w.region?{outer:regToMM(w.region.outer),holes:w.region.holes.map(regToMM)}:null; }
+function winPolys(d){ return d.comps.filter(c=>c.kind==='win'&&c.region).map(w=>{ const m=winMM(w); return {w,polys:[m.outer],holes:m.holes}; }); }
 function zoneRect(c){ if(c.el!=null&&ART.els[c.el]){const b=elMM(ART.els[c.el]); const k=0.66; return {x:b.cx-b.w*k/2,y:b.cy-b.h*k/2,w:b.w*k,h:b.h*k};} const p=pos(c); return {x:p.x-3.5,y:p.y-3.5,w:7,h:7}; }
 
 /* ---------- Diseño derivado: energía, pistas, piezas ---------- */
 function derive(){
   const W=GEO.W,H=GEO.H,fab=S.fab==='fab',P=PRODUCTS[S.product],mount=P.mounts[S.mount];
   const tw={sig:fab?0.25:0.4,pwr:fab?0.5:0.6,heat:fab?0.2:0.4,pitch:fab?0.5:0.9};
-  const comps=S.comps.map(c=>Object.assign({},c,pos(c))); for(let k=comps.length-1;k>=0;k--){ const c=comps[k]; if(c.kind==='win'&&!(c.el!=null&&ART.els[c.el])) comps.splice(k,1); } comps.forEach(c=>{ if(c.kind==='led'&&c.side==='B') c.pkg='inv1206'; });
+  const comps=S.comps.map(c=>Object.assign({},c,pos(c))); for(let k=comps.length-1;k>=0;k--){ const c=comps[k]; if(c.kind==='win'&&!(c.region&&c.region.outer)) comps.splice(k,1); } comps.forEach(c=>{ if(c.kind==='led'&&c.side==='B') c.pkg='inv1206'; });
   let nD=0,nTP=0,nSW=0,nTH=0;
   comps.forEach(c=>{ if(c.kind==='led'||c.kind==='rgb') c.ref='D'+(++nD); if(c.kind==='touch') c.ref='TP'+(++nTP); if(c.kind==='button') c.ref='SW'+(++nSW); if(c.kind==='termo') c.ref='Z'+(++nTH); }); let nW=0; comps.forEach(c=>{ if(c.kind==='win') c.ref='W'+(++nW); });
   const has=k=>comps.some(c=>c.kind===k);
@@ -814,7 +845,7 @@ function recolorArt(){
   S.comps.filter(c=>c.kind==='termo'&&c.el!=null&&ART.els[c.el]).forEach(c=>{const e=ART.els[c.el]; e.node.setAttribute('fill',PIGMENTS[c.pigment].cold);});
   recolorWins();
 }
-function recolorWins(){ if(S.look==='orig') return; S.comps.filter(c=>c.kind==='win'&&c.el!=null&&ART.els[c.el]).forEach(c=>{ const n=ART.els[c.el].node; n.setAttribute('fill',c.mask||S.fab!=='fab'?FR4:mix(MASKS[S.mask],FR4,0.25)); }); }
+function recolorWins(){ return; S.comps.filter(c=>c.kind==='win'&&c.el!=null&&ART.els[c.el]).forEach(c=>{ const n=ART.els[c.el].node; n.setAttribute('fill',c.mask||S.fab!=='fab'?FR4:mix(MASKS[S.mask],FR4,0.25)); }); }
 
 function buildBoard(){
   const g=$('#boardLayer'); g.innerHTML='';
@@ -885,9 +916,11 @@ function drawComps(Dv){ const g=$('#compLayer'); g.innerHTML=''; SIM.glow.clear(
       if(c.el!=null&&ART.els[c.el]){ const n=ART.els[c.el].node; SIM.zones.set(c.id,{node:n,cold:PIGMENTS[c.pigment].cold,hot:PIGMENTS[c.pigment].hot||ART.els[c.el].base}); if(S.sel===c.id){const b=elMM(ART.els[c.el]); el('rect',{x:b.x-0.8,y:b.y-0.8,width:b.w+1.6,height:b.h+1.6,rx:1,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'1 0.6'},g);} }
       else { const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g); const n=el('circle',{r:5,fill:PIGMENTS[c.pigment].cold},gg); SIM.zones.set(c.id,{node:n,cold:PIGMENTS[c.pigment].cold,hot:PIGMENTS[c.pigment].hot||GOLD}); if(S.sel===c.id) el('circle',{r:6,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'1 0.6'},gg); }
       return; }
-    if(c.kind==='win'){ const fr=c.mask||!Dv.fab?FR4:mix(MASKS[S.mask],FR4,0.25), sel=S.sel===c.id;
-      const b=elMM(ART.els[c.el]); if(S.view==='back'||sel) el('rect',{x:b.x-0.6,y:b.y-0.6,width:b.w+1.2,height:b.h+1.2,rx:1,fill:'none',stroke:sel?'#ffb27a':'#e9dca6','stroke-width':sel?0.3:0.2,'stroke-dasharray':'1 0.6'},g);
-      if(S.view==='capas') label(g,b.cx,b.y-0.8,c.ref,1.2); return; }
+    if(c.kind==='win'){ const fr=c.mask||!Dv.fab?FR4:mix(MASKS[S.mask],FR4,0.25), sel=S.sel===c.id, m=winMM(c); if(!m) return;
+      const dd=[m.outer,...m.holes].map(p=>'M'+p.map(q=>r3(q[0])+' '+r3(q[1])).join('L')+'Z').join(''); const gg=el('g',{'data-comp':c.id,'data-win':c.id,class:'comp'},g);
+      if(S.view!=='back') el('path',{d:dd,fill:fr,'fill-rule':'evenodd'},gg);
+      if(S.view==='back'||sel) el('path',{d:dd,fill:'none','fill-rule':'evenodd',stroke:sel?'#ffb27a':'#e9dca6','stroke-width':sel?0.3:0.2,'stroke-dasharray':'1 0.6'},gg);
+      if(S.view==='capas') label(g,c.x,c.y,c.ref,1.2); return; }
     const isB=(c.kind==='led'||c.kind==='rgb')&&c.side==='B';
     if(S.view==='back'&&!isB) return;
     if(S.view!=='back'&&isB){ const lit=Dv.comps.some(w=>w.kind==='win'&&winHit(w,c.x,c.y)); const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g);
@@ -910,10 +943,8 @@ function drawComps(Dv){ const g=$('#compLayer'); g.innerHTML=''; SIM.glow.clear(
 }
 
 function drawHints(){ const g=$('#hintLayer'); g.innerHTML=''; if(S.view!=='front') return;
-  if(S.tool==='win'){ const wm=world.getScreenCTM(); if(!wm) return; const inv=wm.inverse();
-    winCandidates().forEach(e=>{ if(S.comps.some(c=>c.kind==='win'&&c.el===e.i)) return; const nm=e.node.getScreenCTM(); if(!nm) return; const m=inv.multiply(nm);
-      const cl=e.node.cloneNode(false); ['id','data-el','filter','clip-path','mask','style','class'].forEach(a=>cl.removeAttribute(a));
-      Object.entries({fill:'none',stroke:'#ffd27a','stroke-width':1.6,'stroke-dasharray':'4 3','vector-effect':'non-scaling-stroke','pointer-events':'none','data-wincand':e.i,class:'pulse',transform:`matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`}).forEach(([k,v])=>cl.setAttribute(k,v)); g.appendChild(cl); }); }
+  if(S.tool==='win'){ winCandidates().forEach(r=>{ if(S.comps.some(c=>c.kind==='win'&&c.region&&Math.hypot(c.region.cx-r.src.cx,c.region.cy-r.src.cy)<1e-6)) return;
+      el('path',{d:[r.outer,...r.holes].map(p=>'M'+p.map(q=>r3(q[0])+' '+r3(q[1])).join('L')+'Z').join(''),fill:'none','fill-rule':'evenodd',stroke:'#ffd27a','stroke-width':0.22,'stroke-dasharray':'0.9 0.6','pointer-events':'none','data-wincand':r.i,class:'pulse'},g); }); }
 }
 function drawEdge(){ const g=$('#edgeLayer'); g.innerHTML=''; if(S.view!=='capas'||!GEO.poly) return; el('polygon',{points:GEO.poly.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#ffd25a','stroke-width':0.2,'stroke-dasharray':'1 0.6'},g); }
 function drawDims(){ const g=$('#dimLayer'); g.innerHTML=''; const W=GEO.W,H=GEO.H,pad=Math.max(W,H)*0.12+6,fs=Math.max(2.2,Math.max(W,H)*0.035); const y=-pad*0.42,x=-pad*0.42; const st={stroke:'#8fb0a4','stroke-width':0.18};
@@ -1001,7 +1032,7 @@ function renderToolOpts(){ const o=S.opt,t=S.tool; let h='';
   if(t==='select') h='<p class="note">Elige una interacción para agregarla, o toca un componente para editarlo a la derecha.</p>';
   if(t==='led') h=optSelect('tool','side',SIDES,o.side,'Cara')+(o.side==='B'?'<p class="note">LED 1206 de montaje inverso: se suelda en el reverso e ilumina hacia la placa. Su luz se ve a través de una ventana sin cobre.</p>':optSelect('tool','pkg',frontPkgs(),o.pkg,'Tipo de LED'))+colorChips('tool',o.color)+optSelect('tool','beh',BEH_LED,o.beh,'Comportamiento');
   if(t==='rgb') h=optSelect('tool','side',SIDES,o.side,'Cara')+(o.side==='B'?'<p class="note">SK6812MINI-E de montaje inverso en el reverso: su color se ve a través de una ventana sin cobre.</p>':'<p class="note">WS2812B-2020: LEDs de 2 mm que muestran cualquier color y se controlan en cadena.</p>')+optSelect('tool','rgbBeh',BEH_RGB,o.rgbBeh,'Efecto');
-  if(t==='win') h=`<p class="note">Zona sin cobre en ambas caras y sin máscara: la fibra de vidrio (FR4) queda translúcida y deja ver la luz de un LED del reverso. Toca una de las formas <b>negras y cerradas</b> de tu dibujo (marcadas en amarillo): la ventana toma su silueta exacta.</p>${winCandidates().length?'':'<p class="note"><b>Tu dibujo no tiene formas negras cerradas.</b> Dibuja en tu SVG las zonas que quieras translúcidas como formas cerradas rellenas de negro y vuelve a cargarlo.</p>'}`;
+  if(t==='win') h=`<p class="note">Zona sin cobre en ambas caras y sin máscara: la fibra de vidrio (FR4) queda translúcida y deja ver la luz de un LED del reverso. Toca una de las superficies <b>negras y cerradas</b> de tu dibujo (marcadas en amarillo): cada zona negra por separado, aunque sea un hueco dentro de una forma blanca. La ventana toma su silueta exacta.</p>${!ART.regions?'<p class="note">Analizando las superficies del dibujo…</p>':winCandidates().length?'':'<p class="note"><b>Tu dibujo no tiene superficies negras cerradas.</b> Pinta de negro en tu SVG las zonas que quieras translúcidas y vuelve a cargarlo.</p>'}`;
   if(t==='termo') h=optSelect('tool','pigment',PIGMENTS,o.pigment,'Pigmento')+optSelect('tool','act',ACT_TERMO,o.act,'Se calienta')+optSelect('tool','heater',HEATERS,o.heater,'Calefactor');
   if(t==='touch') h='<p class="note">Un círculo de cobre conectado al microcontrolador. Al tocarlo se activa todo lo marcado como “al tocar”.</p>';
   if(t==='button') h=optSelect('tool','action',{modo:'Cambia de modo',onoff:'Enciende y apaga'},o.action,'Función');
@@ -1029,7 +1060,7 @@ function renderSel(){ const p=$('#selPanel'); if(typeof S.sel==='string'&&/^m\d+
       :`<div class="calc"><span>Serpentín: ${fmt(d.serp.len,0)} mm de pista de ${D.tw.heat} mm</span><span>Resistencia ≈ ${fmt(d.Rh,2)} Ω (cobre 35 µm)</span><span>Corriente a 3,7 V: ${fmt(d.heatI/1000,2)} A</span></div>`; }
   if(c.kind==='button') h+=optSelect('sel','action',{modo:'Cambia de modo',onoff:'Enciende y apaga'},c.action,'Función');
   if(c.kind==='touch') h+='<p class="note">Pad de cobre conectado al microcontrolador por una vía.</p>';
-  if(c.kind==='win'){ h+='<p class="note">Usa la silueta de la forma negra del dibujo que tocaste.</p>';
+  if(c.kind==='win'){ h+='<p class="note">Usa la silueta de la superficie negra del dibujo que tocaste.</p>';
     h+=`<label class="field chk"><input type="checkbox" data-scope="sel" data-k="mask" ${c.mask?'checked':''}> Quitar la máscara en ambas caras (deja la fibra a la vista)</label><label class="field chk"><input type="checkbox" data-scope="sel" data-k="silk" ${c.silk?'checked':''}> Mantener la serigrafía del dibujo encima</label>`;
     const n=d.ref?D.comps.filter(x=>(x.kind==='led'||x.kind==='rgb')&&x.side==='B'&&winHit(d,x.x,x.y)).map(x=>x.ref):[]; h+=`<p class="note">Sin cobre en ninguna cara. ${n.length?'Ilumina: '+n.join(', ')+'.':'Ningún LED del reverso debajo todavía: pon uno con la cara «Reverso».'} La FR4 de 1,6 mm difunde la luz; con 0,8 mm se ve más nítida.</p>`; }
   p.innerHTML=h; }
@@ -1073,7 +1104,7 @@ stage.addEventListener('pointerdown',e=>{ if(!ART.vb) return; const p=toMM(e);
   const mg=S.sim?null:e.target.closest('[data-mount]');
   if(mg){ const i=+mg.dataset.mount; S.sel='m'+i; drag={mount:i,moved:false}; stage.setPointerCapture(e.pointerId); render(); return; }
   if(cg){ const id=+cg.dataset.comp; S.sel=id; drag={id,moved:false}; stage.setPointerCapture(e.pointerId); render(); return; }
-  if(elIdx!=null&&(S.tool==='select'||S.tool==='termo'||S.tool==='win')){ const z=S.comps.find(c=>(c.kind==='termo'||c.kind==='win')&&c.el===elIdx&&(S.tool==='select'||c.kind===S.tool)); if(z){ S.sel=z.id; render(); return; } }
+  if(elIdx!=null&&(S.tool==='select'||S.tool==='termo')){ const z=S.comps.find(c=>c.kind==='termo'&&c.el===elIdx&&(S.tool==='select'||c.kind===S.tool)); if(z){ S.sel=z.id; render(); return; } }
   if(S.tool==='select'){ S.sel=null; render(); return; }
   if(!insideBoard(p.x,p.y)){ toast('Toca dentro de la placa.'); return; }
   if(S.tool==='termo'&&elIdx==null&&S.view==='front'){ /* zona libre circular */ }
@@ -1213,7 +1244,7 @@ function makePedido(){ render(); const d=D,B=d.B,M=d.M;
     pieza:{tipo:S.product,cantidad:S.product==='aro'?2:1,ancho_mm:r3(d.W),alto_mm:r3(d.H),grosor_mm:d.P.thick,sujecion:d.mount.label,nombre:S.artName||'badge'},
     fabricacion:S.fab==='fab'?{metodo:'pcb_fabrica',mascara:S.mask,acabado:'ENIG'}:{metodo:'fresado_makera_z1'},
     contorno_mm:P(outlinePts()),agujeros:d.holes.map(h=>({x_mm:r3(h.x),y_mm:r3(h.y),diametro_mm:h.d,uso:d.mount.id})),arte,
-    ventanas:winPolys(d).flatMap(x=>x.polys.map(pl=>({nombre:x.w.ref,poligono_mm:P(rdpClosed(pl,0.03)),sin_cobre:['F.Cu','B.Cu'],abrir_mascara:x.w.mask?['F.Mask','B.Mask']:[],quitar_serigrafia:!x.w.silk,ilumina:d.comps.filter(c=>(c.kind==='led'||c.kind==='rgb')&&c.side==='B'&&winHit(x.w,c.x,c.y)).map(c=>c.ref)}))),
+    ventanas:winPolys(d).flatMap(x=>x.polys.map(pl=>({nombre:x.w.ref,poligono_mm:P(rdpClosed(pl,0.03)),huecos_mm:(x.holes||[]).map(h=>P(rdpClosed(h,0.03))),sin_cobre:['F.Cu','B.Cu'],abrir_mascara:x.w.mask?['F.Mask','B.Mask']:[],quitar_serigrafia:!x.w.silk,ilumina:d.comps.filter(c=>(c.kind==='led'||c.kind==='rgb')&&c.side==='B'&&winHit(x.w,c.x,c.y)).map(c=>c.ref)}))),
     control:{mcu:d.mcuId,lcsc:M?M.lcsc:null,elegido:d.mcuAuto?'auto':'manual',patas_usadas:d.pinsReq,programacion:d.needMCU?M.prog:null},
     energia:{tipo:d.bk,lcsc:B.lcsc||null,usb_c:!!B.usb,interruptor:!!B.usb||d.comps.some(c=>c.kind==='button'&&c.action==='onoff'),autonomia_min:d.minutes!=null?r3(d.minutes):(d.hours===Infinity?null:r3(d.hours*60))},
     piezas_fijas:fixed,piezas_libres:free,senales:sen,reglas:{fab:'jlcpcb',pista_min_mm:d.tw.sig,separacion_mm:0.2},
@@ -1412,12 +1443,15 @@ function generateGerbers(){
   const termoDraw=(g,grow)=>termo.forEach(c=>{ const a=c.el!=null?geo.find(x=>x.e.i===c.el):null; if(a) a.contours.forEach((ct,i)=>{ if(!a.holes.has(i)) g.region(ct); }); else g.flashC(c.x,c.y,10+grow); });
   const serp=(g,grow)=>termo.filter(c=>c.serp).forEach(c=>g.line(c.serp.pts,d.tw.heat+grow));
   const WP=winPolys(d); const winDraw=(g,pred)=>WP.filter(x=>!pred||pred(x.w)).forEach(x=>x.polys.forEach(pl=>g.region(pl)));
-  const clearWins=g=>{ if(!WP.length) return; g.polarity('C'); winDraw(g); g.polarity('D'); };
+  const winHoles=(g,pred)=>WP.filter(x=>!pred||pred(x.w)).forEach(x=>(x.holes||[]).forEach(pl=>g.region(pl)));
+  /* despeja la ventana; con keep=true devuelve el cobre a las islas claras que quedan dentro (fresado Z1: claro = cobre) */
+  const clearWins=(g,keep)=>{ if(!WP.length) return; g.polarity('C'); winDraw(g); g.polarity('D'); if(keep) winHoles(g); };
+  const maskWins=g=>{ winDraw(g,w=>w.mask); g.polarity('C'); winHoles(g,w=>w.mask); g.polarity('D'); };
   if(ART.mode==='layers'){ const has=sl=>geo.some(a=>a.e.slot===sl); const bs=mk('Legend,Bot'), tp=mk('Paste,Top'), bp=mk('Paste,Bot');
     paintSlot(fcu,geo,'cu-top'); termoDraw(fcu,0); clearWins(fcu); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0));
     paintSlot(bcu,geo,'cu-bottom'); clearWins(bcu); d.tracksB.forEach(t=>bcu.line(t.pts,t.w)); serp(bcu,0); bP.forEach(p=>flash(bcu,p,0));
-    paintSlot(fm,geo,'sm-top'); termoDraw(fm,0.2); winDraw(fm,w=>w.mask); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
-    paintSlot(bm,geo,'sm-bottom'); winDraw(bm,w=>w.mask); bP.filter(p=>!p.via).forEach(p=>flash(bm,p,0.1));
+    paintSlot(fm,geo,'sm-top'); termoDraw(fm,0.2); maskWins(fm); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
+    paintSlot(bm,geo,'sm-bottom'); maskWins(bm); bP.filter(p=>!p.via).forEach(p=>flash(bm,p,0.1));
     paintSlot(fs,geo,'ss-top'); fs.polarity('C'); termoDraw(fs,0.4); winDraw(fs,w=>!w.silk); fs.polarity('D'); paintSlot(bs,geo,'ss-bottom'); paintSlot(tp,geo,'sp-top'); paintSlot(bp,geo,'sp-bottom');
     if(has('outline')) geo.filter(a=>a.e.slot==='outline').forEach(a=>a.contours.forEach(c=>edge.line(c,0.1,a.closed))); else edge.line(poly,0.1,true);
     const extra=[]; geo.filter(a=>a.e.slot==='drill').forEach(a=>a.contours.forEach(c=>{ const xs=c.map(p=>p[0]),ys=c.map(p=>p[1]); const w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys); if(w>0.05&&h>0.05) extra.push({x:(Math.max(...xs)+Math.min(...xs))/2,y:(Math.max(...ys)+Math.min(...ys))/2,d:r3(Math.min(w,h))}); }));
@@ -1426,12 +1460,12 @@ function generateGerbers(){
     files.push({filename:`${pre}-Edge_Cuts.gm1`,gerber:edge.toString()},{filename:`${pre}.drl`,gerber:makeDrill(d,pads,extra)});
     GERBERS={files,fab,mask:S.mask,skippedText:geo.skippedText,stamp:Date.now()}; return GERBERS; }
   if(fab){ paintArt(fcu,geo,mid,false); termoDraw(fcu,0); clearWins(fcu); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0)); }
-  else { fcu.region(poly); paintArt(fcu,geo,notDark,true); clearWins(fcu); fcu.polarity('C'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w+2*iso)); fP.forEach(p=>flash(fcu,p,2*iso)); fcu.polarity('D'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0)); }
+  else { fcu.region(poly); paintArt(fcu,geo,notDark,true); clearWins(fcu,true); fcu.polarity('C'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w+2*iso)); fP.forEach(p=>flash(fcu,p,2*iso)); fcu.polarity('D'); d.tracksF.forEach(t=>fcu.line(t.pts,t.w)); fP.forEach(p=>flash(fcu,p,0)); }
   if(!fab){ bcu.region(poly); bcu.polarity('C'); d.tracksB.forEach(t=>bcu.line(t.pts,t.w+2*iso)); serp(bcu,2*iso); bP.forEach(p=>flash(bcu,p,2*iso)); bcu.polarity('D'); }
   clearWins(bcu); d.tracksB.forEach(t=>bcu.line(t.pts,t.w)); serp(bcu,0); bP.forEach(p=>flash(bcu,p,0));
-  if(fab){ paintArt(fm,geo,mid,false); termoDraw(fm,0.2); winDraw(fm,w=>w.mask); winDraw(bm,w=>w.mask); d.tracksF.forEach(t=>fm.line(t.pts,t.w+0.1)); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
+  if(fab){ paintArt(fm,geo,mid,false); termoDraw(fm,0.2); maskWins(fm); maskWins(bm); d.tracksF.forEach(t=>fm.line(t.pts,t.w+0.1)); fP.filter(p=>!p.via).forEach(p=>flash(fm,p,0.1));
     bP.filter(p=>!p.via).forEach(p=>flash(bm,p,0.1));
-    paintArt(fs,geo,light,false); fs.polarity('C'); termoDraw(fs,0.4); winDraw(fs,w=>!w.silk); fP.forEach(p=>flash(fs,p,0.3)); fs.polarity('D'); }
+    paintArt(fs,geo,light,false); fs.polarity('C'); termoDraw(fs,0.4); winDraw(fs,w=>!w.silk); fs.polarity('D'); winHoles(fs,w=>!w.silk); fs.polarity('C'); fP.forEach(p=>flash(fs,p,0.3)); fs.polarity('D'); }
   else { fm.region(poly); bm.region(poly); }
   edge.line(poly,0.1,true);
   const files=[{filename:`${pre}-F_Cu.gtl`,gerber:fcu.toString()},{filename:`${pre}-B_Cu.gbl`,gerber:bcu.toString()},{filename:`${pre}-F_Mask.gts`,gerber:fm.toString()},{filename:`${pre}-B_Mask.gbs`,gerber:bm.toString()}];

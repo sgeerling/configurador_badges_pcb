@@ -26,17 +26,21 @@ module.exports = async function (t) {
     t.eq([r.added, r.wins], [1, 0], 'backlight_noauto: poner un LED en el reverso no inventa una ventana');
     t.eq(r.warns, ['warn'], 'backlight_nowin: avisa que la luz no se verá');
 
-    // ventanas: solo formas negras y cerradas del SVG
-    const cand = await page.evaluate(() => { S.tool = 'win'; render(); return { list: winCandidates().map((e) => e.i).sort((a, b) => a - b), marks: document.querySelectorAll('#hintLayer [data-wincand]').length }; });
-    t.eq(cand.list, [0, 5, 6], 'win_candidates: solo el cuerpo y las pupilas (negros y cerrados)');
-    t.eq(cand.marks, 3, 'win_candidates: se marcan en la mesa');
-    const rej = await page.evaluate(() => { const n0 = S.comps.length; const a = addComp('win', { x: 30, y: 52 }, 1); const b = addComp('win', { x: 30, y: 75 }, 8); const c = addComp('win', { x: 2, y: 2 }, null); return { added: S.comps.length - n0, ret: [a, b, c].map((x) => x == null) }; });
-    t.eq(rej.added, 0, 'win_reject: no acepta formas claras, abiertas ni puntos vacíos');
-    t.eq(rej.ret, [true, true, true], 'win_reject: addComp devuelve null');
+    // ventanas: superficies negras visibles y cerradas del dibujo
+    await page.waitForFunction(() => Array.isArray(ART.regions), null, { timeout: 10000 });
+    const cand = await page.evaluate(() => { S.tool = 'win'; render(); const C = winCandidates(); const hit = (x, y) => C.filter((c) => pointInPoly(x, y, c.outer) && !c.holes.some((h) => pointInPoly(x, y, h))).map((c) => Math.round(c.area));
+      return { n: C.length, marks: document.querySelectorAll('#hintLayer [data-wincand]').length, pupilL: hit(19.6, 29.3), pupilR: hit(40.8, 29.3), belly: hit(30, 52), out: hit(1, 1) }; });
+    t.ok(cand.pupilL.length === 1 && cand.pupilL[0] < 60, 'win_regions: la pupila izquierda es una superficie propia ' + JSON.stringify(cand));
+    t.ok(cand.pupilR.length === 1 && cand.pupilR[0] < 60, 'win_regions: la pupila derecha es una superficie propia');
+    t.eq([cand.belly.length, cand.out.length], [0, 0], 'win_regions: el vientre (claro) y el exterior no son candidatos');
+    t.eq(cand.marks, cand.n, 'win_candidates: cada superficie se marca en la mesa');
+    const rej = await page.evaluate(() => { const n0 = S.comps.length; const a = addComp('win', { x: 30, y: 52 }, 1); const c = addComp('win', { x: 1, y: 1 }, null); return { added: S.comps.length - n0, ret: [a, c].map((x) => x == null) }; });
+    t.eq(rej.added, 0, 'win_reject: no acepta zonas claras ni puntos fuera del dibujo');
+    t.eq(rej.ret, [true, true], 'win_reject: addComp devuelve null');
     t.eq(await page.evaluate(() => typeof WIN_R), 'undefined', 'win_nocircle: no hay ventanas circulares genéricas');
-    const ok = await page.evaluate(() => { const w = addComp('win', { x: 40.8, y: 29.3 }, 6); render(); return { el: w && w.el, fill: ART.els[6].node.getAttribute('fill'), lit: D.warns.filter((x) => /no se verá/.test(x.t)).length }; });
-    t.eq(ok.el, 6, 'win_el: la pupila negra se vuelve ventana');
-    t.eq(ok.fill, await page.evaluate(() => FR4), 'en la vista del frente se ve la fibra (color FR4)');
+    const ok = await page.evaluate(() => { const w = addComp('win', { x: 40.8, y: 29.3 }, null); render(); return { region: !!(w && w.region), lit: D.warns.filter((x) => /no se verá/.test(x.t)).length, fr4: !!document.querySelector('#compLayer [data-win] path[fill="' + FR4 + '"]') }; });
+    t.ok(ok.region, 'win_region: la pupila negra se vuelve ventana');
+    t.ok(ok.fr4, 'en la vista del frente se ve la fibra (color FR4)');
     t.eq(ok.lit, 0, 'el LED del reverso queda bajo la ventana');
 
     await page.evaluate(() => { S.sel = S.comps.find((c) => c.kind === 'win').id; render(); });
@@ -46,6 +50,7 @@ module.exports = async function (t) {
     const ped = JSON.parse(await page.evaluate(() => makePedido()));
     t.ok(validate(ped), 'backlight_pedido: cumple el esquema — ' + JSON.stringify(validate.errors && validate.errors.slice(0, 2)));
     t.ok(Array.isArray(ped.ventanas) && ped.ventanas.length === 1 && ped.ventanas[0].poligono_mm.length > 8, 'pedido trae la ventana con el polígono de la pupila');
+    t.ok(ped.ventanas[0].poligono_mm.every(([x, y]) => Math.hypot(x - 40.8, y - 29.3) < 6), 'el polígono es solo la pupila, no todo el dibujo');
     t.eq(ped.ventanas[0].sin_cobre, ['F.Cu', 'B.Cu'], 'sin cobre en ambas caras');
     const bl = ped.piezas_fijas.find((p) => p.ref === r.led.ref);
     t.ok(bl && bl.cara === 'B' && /inverso/i.test(bl.valor), 'el LED del reverso va en cara B como montaje inverso ' + JSON.stringify(bl));
