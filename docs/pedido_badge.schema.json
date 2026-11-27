@@ -2,91 +2,472 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Pedido de badge para KiCad (versión 2)",
   "type": "object",
-  "required": ["tipo", "version", "generado", "pieza", "fabricacion", "contorno_mm", "agujeros", "arte", "control", "energia", "piezas_fijas", "piezas_libres", "senales", "reglas", "revisiones"],
+  "required": [
+    "tipo",
+    "version",
+    "generado",
+    "pieza",
+    "fabricacion",
+    "contorno_mm",
+    "agujeros",
+    "arte",
+    "control",
+    "energia",
+    "piezas_fijas",
+    "piezas_libres",
+    "senales",
+    "reglas",
+    "revisiones"
+  ],
   "definitions": {
-    "pt": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-    "poly": { "type": "array", "items": { "$ref": "#/definitions/pt" }, "minItems": 2 }
+    "pt": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "poly": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/pt"
+      },
+      "minItems": 2
+    }
   },
   "properties": {
-    "tipo": { "const": "pedido_badge" },
-    "version": { "const": 2 },
-    "generado": { "type": "string" },
+    "tipo": {
+      "const": "pedido_badge"
+    },
+    "version": {
+      "const": 2
+    },
+    "generado": {
+      "type": "string"
+    },
     "pieza": {
       "type": "object",
-      "required": ["tipo", "cantidad", "ancho_mm", "alto_mm", "grosor_mm", "sujecion", "nombre"],
+      "required": [
+        "tipo",
+        "cantidad",
+        "ancho_mm",
+        "alto_mm",
+        "grosor_mm",
+        "sujecion",
+        "nombre"
+      ],
       "properties": {
-        "tipo": { "enum": ["badge", "pin", "aro"] },
-        "cantidad": { "type": "integer", "minimum": 1 },
-        "ancho_mm": { "type": "number", "exclusiveMinimum": 0 },
-        "alto_mm": { "type": "number", "exclusiveMinimum": 0 },
-        "grosor_mm": { "type": "number" },
-        "sujecion": { "type": "string" },
-        "nombre": { "type": "string" }
+        "tipo": {
+          "enum": [
+            "badge",
+            "pin",
+            "aro"
+          ]
+        },
+        "cantidad": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ancho_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "alto_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "grosor_mm": {
+          "type": "number"
+        },
+        "sujecion": {
+          "type": "string"
+        },
+        "nombre": {
+          "type": "string"
+        }
       }
     },
     "fabricacion": {
       "type": "object",
-      "required": ["metodo"],
-      "properties": { "metodo": { "enum": ["pcb_fabrica", "fresado_makera_z1"] }, "mascara": { "type": "string" }, "acabado": { "type": "string" } }
+      "required": [
+        "metodo"
+      ],
+      "properties": {
+        "metodo": {
+          "enum": [
+            "pcb_fabrica",
+            "fresado_makera_z1"
+          ]
+        },
+        "mascara": {
+          "type": "string"
+        },
+        "acabado": {
+          "type": "string"
+        }
+      }
     },
-    "contorno_mm": { "$ref": "#/definitions/poly" },
+    "contorno_mm": {
+      "$ref": "#/definitions/poly"
+    },
     "agujeros": {
       "type": "array",
-      "items": { "type": "object", "required": ["x_mm", "y_mm", "diametro_mm"], "properties": { "x_mm": { "type": "number" }, "y_mm": { "type": "number" }, "diametro_mm": { "type": "number" }, "uso": { "type": "string" } } }
+      "items": {
+        "type": "object",
+        "required": [
+          "x_mm",
+          "y_mm",
+          "diametro_mm"
+        ],
+        "properties": {
+          "x_mm": {
+            "type": "number"
+          },
+          "y_mm": {
+            "type": "number"
+          },
+          "diametro_mm": {
+            "type": "number"
+          },
+          "uso": {
+            "type": "string"
+          }
+        }
+      }
     },
     "arte": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["capa", "tono", "orden", "poligonos_mm", "huecos_mm", "trazos_mm"],
+        "required": [
+          "capa",
+          "tono",
+          "orden",
+          "poligonos_mm",
+          "huecos_mm",
+          "trazos_mm"
+        ],
         "properties": {
-          "capa": { "enum": ["F.SilkS", "F.Cu+F.Mask", "F.Cu", "F.Mask", "B.SilkS", "B.Cu", "B.Mask", "F.Paste", "B.Paste", "borra"] },
-          "tono": { "enum": ["claro", "medio", "oscuro", "capa"] },
-          "orden": { "type": "integer" },
-          "poligonos_mm": { "type": "array", "items": { "$ref": "#/definitions/poly" } },
-          "huecos_mm": { "type": "array", "items": { "$ref": "#/definitions/poly" } },
-          "trazos_mm": { "type": "array", "items": { "type": "object", "required": ["puntos", "ancho_mm", "cerrado"], "properties": { "puntos": { "$ref": "#/definitions/poly" }, "ancho_mm": { "type": "number" }, "cerrado": { "type": "boolean" } } } }
+          "capa": {
+            "enum": [
+              "F.SilkS",
+              "F.Cu+F.Mask",
+              "F.Cu",
+              "F.Mask",
+              "B.SilkS",
+              "B.Cu",
+              "B.Mask",
+              "F.Paste",
+              "B.Paste",
+              "borra"
+            ]
+          },
+          "tono": {
+            "enum": [
+              "claro",
+              "medio",
+              "oscuro",
+              "capa"
+            ]
+          },
+          "orden": {
+            "type": "integer"
+          },
+          "poligonos_mm": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/poly"
+            }
+          },
+          "huecos_mm": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/poly"
+            }
+          },
+          "trazos_mm": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "puntos",
+                "ancho_mm",
+                "cerrado"
+              ],
+              "properties": {
+                "puntos": {
+                  "$ref": "#/definitions/poly"
+                },
+                "ancho_mm": {
+                  "type": "number"
+                },
+                "cerrado": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
         }
       }
     },
     "control": {
       "type": "object",
-      "required": ["mcu", "lcsc", "elegido", "patas_usadas"],
-      "properties": { "mcu": { "type": "string" }, "lcsc": { "type": ["string", "null"] }, "elegido": { "enum": ["auto", "manual"] }, "patas_usadas": { "type": "integer" }, "programacion": { "type": ["string", "null"] } }
+      "required": [
+        "mcu",
+        "lcsc",
+        "elegido",
+        "patas_usadas"
+      ],
+      "properties": {
+        "mcu": {
+          "type": "string"
+        },
+        "lcsc": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "elegido": {
+          "enum": [
+            "auto",
+            "manual"
+          ]
+        },
+        "patas_usadas": {
+          "type": "integer"
+        },
+        "programacion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     },
     "energia": {
       "type": "object",
-      "required": ["tipo", "usb_c", "interruptor"],
-      "properties": { "tipo": { "enum": ["cr2032", "cr1220", "lipo70", "lipo180", "sc1f", "sc15f"] }, "lcsc": { "type": ["string", "null"] }, "usb_c": { "type": "boolean" }, "interruptor": { "type": "boolean" }, "autonomia_min": { "type": ["number", "null"] } }
+      "required": [
+        "tipo",
+        "usb_c",
+        "interruptor"
+      ],
+      "properties": {
+        "tipo": {
+          "enum": [
+            "cr2032",
+            "cr1220",
+            "lipo70",
+            "lipo180",
+            "sc1f",
+            "sc15f"
+          ]
+        },
+        "lcsc": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "usb_c": {
+          "type": "boolean"
+        },
+        "interruptor": {
+          "type": "boolean"
+        },
+        "autonomia_min": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
     },
     "piezas_fijas": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["ref", "rol", "lcsc", "valor", "x_mm", "y_mm", "rot_deg", "cara", "funcion"],
+        "required": [
+          "ref",
+          "rol",
+          "lcsc",
+          "valor",
+          "x_mm",
+          "y_mm",
+          "rot_deg",
+          "cara",
+          "funcion"
+        ],
         "properties": {
-          "ref": { "type": "string" },
-          "rol": { "enum": ["led", "rgb", "termo", "touch", "button"] },
-          "lcsc": { "type": ["string", "null"] },
-          "valor": { "type": "string" },
-          "x_mm": { "type": "number" },
-          "y_mm": { "type": "number" },
-          "rot_deg": { "type": "number" },
-          "cara": { "enum": ["F", "B"] },
-          "funcion": { "type": "object" },
-          "zona_mm": { "$ref": "#/definitions/poly" }
+          "ref": {
+            "type": "string"
+          },
+          "rol": {
+            "enum": [
+              "led",
+              "rgb",
+              "termo",
+              "touch",
+              "button"
+            ]
+          },
+          "lcsc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valor": {
+            "type": "string"
+          },
+          "x_mm": {
+            "type": "number"
+          },
+          "y_mm": {
+            "type": "number"
+          },
+          "rot_deg": {
+            "type": "number"
+          },
+          "cara": {
+            "enum": [
+              "F",
+              "B"
+            ]
+          },
+          "funcion": {
+            "type": "object"
+          },
+          "zona_mm": {
+            "$ref": "#/definitions/poly"
+          }
         }
       }
     },
     "piezas_libres": {
       "type": "array",
-      "items": { "type": "object", "required": ["rol", "valor"], "properties": { "rol": { "type": "string" }, "lcsc": { "type": ["string", "null"] }, "valor": { "type": "string" }, "nota": { "type": "string" }, "ref_provisional": { "type": "string" } } }
+      "items": {
+        "type": "object",
+        "required": [
+          "rol",
+          "valor"
+        ],
+        "properties": {
+          "rol": {
+            "type": "string"
+          },
+          "lcsc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valor": {
+            "type": "string"
+          },
+          "nota": {
+            "type": "string"
+          },
+          "ref_provisional": {
+            "type": "string"
+          },
+          "posicion_mm": {
+            "type": "object",
+            "description": "Posición fijada a mano en el configurador (sujeciones: poste de broche, imán, conector SAO). Si está, Copper la coloca ahí y la bloquea.",
+            "required": [
+              "x_mm",
+              "y_mm"
+            ],
+            "properties": {
+              "x_mm": {
+                "type": "number"
+              },
+              "y_mm": {
+                "type": "number"
+              },
+              "cara": {
+                "enum": [
+                  "F",
+                  "B"
+                ]
+              }
+            }
+          }
+        }
+      }
     },
     "senales": {
       "type": "array",
-      "items": { "type": "object", "required": ["nombre", "desde", "hacia", "tipo"], "properties": { "nombre": { "type": "string" }, "desde": { "const": "MCU" }, "hacia": { "type": "string" }, "tipo": { "enum": ["salida", "entrada_tactil", "boton", "pwm_calefactor", "datos_rgb"] } } }
+      "items": {
+        "type": "object",
+        "required": [
+          "nombre",
+          "desde",
+          "hacia",
+          "tipo"
+        ],
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "desde": {
+            "const": "MCU"
+          },
+          "hacia": {
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "salida",
+              "entrada_tactil",
+              "boton",
+              "pwm_calefactor",
+              "datos_rgb"
+            ]
+          }
+        }
+      }
     },
-    "reglas": { "type": "object", "required": ["fab"], "properties": { "fab": { "type": "string" }, "pista_min_mm": { "type": "number" }, "separacion_mm": { "type": "number" } } },
-    "revisiones": { "type": "array", "items": { "type": "object", "required": ["nivel", "texto"], "properties": { "nivel": { "enum": ["ok", "info", "warn", "crit"] }, "texto": { "type": "string" } } } }
+    "reglas": {
+      "type": "object",
+      "required": [
+        "fab"
+      ],
+      "properties": {
+        "fab": {
+          "type": "string"
+        },
+        "pista_min_mm": {
+          "type": "number"
+        },
+        "separacion_mm": {
+          "type": "number"
+        }
+      }
+    },
+    "revisiones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "nivel",
+          "texto"
+        ],
+        "properties": {
+          "nivel": {
+            "enum": [
+              "ok",
+              "info",
+              "warn",
+              "crit"
+            ]
+          },
+          "texto": {
+            "type": "string"
+          }
+        }
+      }
+    }
   }
 }

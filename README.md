@@ -75,3 +75,11 @@ Para publicar una placa nueva:
 1. En KiCad: Herramientas › Complementos externos › Generate Interactive HTML BOM.
 2. Copia el `.html` generado a `boms/<nombre>.html`.
 3. Agrega una entrada a la lista `IBOMS` en `index.html` (`id`, `name`, `desc`, `file`).
+
+## Sujeciones movibles
+
+Cada sujeción (agujeros de cordón, gancho o argolla, conector SAO, poste de broche, imán) aparece en la mesa con un
+círculo punteado: se arrastra o se escriben sus coordenadas X/Y en el panel. La posición se guarda por tipo de pieza y
+de sujeción, entra al deshacer/rehacer y se usa en todas las exportaciones. «Posición automática» la devuelve a su
+lugar calculado. Si queda fuera de la placa o pegada al borde, aparece un bloqueo en «Revisiones antes de fabricar».
+En el pedido para KiCad, las sujeciones movidas a mano van con `posicion_mm` y Copper las deja ahí.
