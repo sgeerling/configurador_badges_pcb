@@ -447,7 +447,7 @@ function fitsSilhouette(B){ if(!GEO.poly) return true; const key=traceKey+'|'+(B
 function pinsNeeded(comps){ let n=0; comps.forEach(c=>{ if(c.kind==='led'&&c.beh!=='fijo') n++; if(c.kind==='touch'||c.kind==='termo') n++; if(c.kind==='button'&&c.action==='modo') n++; }); if(comps.some(c=>c.kind==='rgb')) n++; return n; }
 function mcuFits(m,B){ if(m.extras.includes('regulador 3,3 V')) return !!B.usb&&!B.supercap; return m.vmin<=B.vlo&&m.vmax>=B.vhi; }
 const FR4='#d8cf9f'; /* fibra de vidrio sin cobre ni máscara, vista con luz */
-const SIDES={F:'Frente',B:'Reverso (la luz atraviesa la fibra)'}, WIN_R={3:'Círculo Ø6 mm',4:'Círculo Ø8 mm',6:'Círculo Ø12 mm',8:'Círculo Ø16 mm',11:'Círculo Ø22 mm'};
+const SIDES={F:'Frente',B:'Reverso (la luz atraviesa la fibra)'};
 const MASKS={negro:'#141518',verde:'#1d5a39',morado:'#4a2a6a',azul:'#1c3d70',rojo:'#86201f',blanco:'#ecece6',amarillo:'#d2ab1c'};
 const MASK_LBL={negro:'Negra',verde:'Verde',morado:'Morada',azul:'Azul',rojo:'Roja',blanco:'Blanca',amarillo:'Amarilla'};
 const GOLD='#d7b057';
@@ -477,7 +477,7 @@ const OWL=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 232">
 
 /* ---------- Estado ---------- */
 const S={product:'badge',size:80,mount:0,outline:'silueta',margin:2.5,fab:'fab',mask:'negro',battery:'auto',view:'front',look:'pcb',traces:true,
-  tool:'select',opt:{pkg:'s1206',color:'rojo',beh:'respiracion',rgbBeh:'arcoiris',pigment:'azul-rosa',act:'tacto',heater:'smd',action:'modo',side:'F',winR:4},
+  tool:'select',opt:{pkg:'s1206',color:'rojo',beh:'respiracion',rgbBeh:'arcoiris',pigment:'azul-rosa',act:'tacto',heater:'smd',action:'modo',side:'F'},
   comps:[],sel:null,sim:false,artName:'',layerFiles:[],mcu:'auto',mountPos:{}};
 const ART={id:0,vb:null,els:[],mode:'single',board:null,boardBox:null};
 const GEO={W:60,H:60,s:1,ox:0,oy:0,poly:null,polyArea:0,centroid:null,silNode:null,islands:false,polyNote:''};
@@ -608,15 +608,6 @@ function computeGeo(){ const vb=ART.vb,m=S.margin;
   else {const s=(S.size-2*m)/Math.max(vb.w,vb.h); Object.assign(GEO,{W:vb.w*s+2*m,H:vb.h*s+2*m,s,ox:m,oy:m});}
 }
 
-/* ---------- Detección de puntos (ojos) ---------- */
-function eyeCandidates(){ const A=GEO.W*GEO.H, H=GEO.H;
-  let c=ART.els.filter(e=>e.tag!=='text'&&e.fill!=='none'&&isFrontEl(e)).map(e=>Object.assign({e},elMM(e))).filter(b=>b.area>A*0.0012&&b.area<A*0.07&&b.w/b.h>0.55&&b.w/b.h<1.8);
-  c=c.filter(a=>!c.some(b=>b!==a&&b.area<a.area*0.8&&b.cx>a.x&&b.cx<a.x+a.w&&b.cy>a.y&&b.cy<a.y+a.h));
-  c.forEach(a=>{a.score=(['circle','ellipse'].includes(a.e.tag)?1:0)+(c.some(b=>b!==a&&Math.abs(b.cy-a.cy)<H*0.06&&Math.abs(b.area-a.area)<a.area*0.35&&Math.abs(b.cx-a.cx)>a.w)?2:0)+(a.cy<H*0.6?0.5:0);});
-  c.sort((a,b)=>b.score-a.score);
-  const out=[]; for(const a of c){ if(!out.some(o=>Math.hypot(o.cx-a.cx,o.cy-a.cy)<Math.max(o.w,o.h)*0.7)) out.push(a); if(out.length>=6) break; }
-  return out.filter(a=>a.score>=1.5);
-}
 function termoCandidate(){ const A=GEO.W*GEO.H; const used=new Set(S.comps.filter(c=>c.kind==='termo').map(c=>c.el));
   const c=ART.els.filter(e=>e.fill!=='none'&&!used.has(e.i)&&isFrontEl(e)).map(e=>Object.assign({e},elMM(e))).filter(b=>b.area>A*0.04&&b.area<A*0.45);
   c.sort((a,b)=>Math.hypot(a.cx-GEO.W/2,a.cy-GEO.H*0.6)-Math.hypot(b.cx-GEO.W/2,b.cy-GEO.H*0.6)); return c[0]||null;}
@@ -625,36 +616,40 @@ function termoCandidate(){ const A=GEO.W*GEO.H; const used=new Set(S.comps.filte
 function pos(c){ if(c.el!=null&&ART.els[c.el]){const b=elMM(ART.els[c.el]); return {x:b.cx,y:b.cy};} return {x:c.u*GEO.W,y:c.v*GEO.H}; }
 function addComp(kind,p,elIdx){
   const o=S.opt; const c={id:UID++,kind,u:p.x/GEO.W,v:p.y/GEO.H,el:null};
-  if(elIdx!=null){const b=elMM(ART.els[elIdx]); if(kind==='termo'||b.area<GEO.W*GEO.H*0.07) c.el=elIdx;}
+  /* LEDs, sensores y botones quedan donde se tocan; solo la zona termocrómica y la ventana toman una forma del dibujo */
+  if(kind==='termo'&&elIdx!=null) c.el=elIdx;
   if(kind==='led') Object.assign(c,{pkg:o.pkg,color:o.color,beh:o.beh,side:o.side||'F'});
   if(kind==='rgb') Object.assign(c,{beh:o.rgbBeh,side:o.side||'F'});
-  if(kind==='win'){ c.el=elIdx!=null?elIdx:null; Object.assign(c,{r:+o.winR||4,mask:true,silk:false}); }
+  if(kind==='win'){ if(elIdx==null||!winOk(ART.els[elIdx])){ toast('Las ventanas se eligen entre las formas negras y cerradas del dibujo (marcadas en amarillo).'); return null; }
+    if(S.comps.some(x=>x.kind==='win'&&x.el===elIdx)){ toast('Esa forma ya es una ventana.'); return null; } c.el=elIdx; Object.assign(c,{mask:true,silk:false}); }
   if(kind==='termo'){ if(c.el==null&&elIdx==null){} Object.assign(c,{pigment:o.pigment,act:o.act,heater:o.heater}); }
   if(kind==='button') Object.assign(c,{action:o.action});
-  S.comps.push(c); S.sel=c.id; ensureWindow(c); return c;
+  S.comps.push(c); S.sel=c.id; return c;
 }
 /* ---------- Ventanas translúcidas: zonas sin cobre para que la luz de un LED del reverso atraviese la fibra ---------- */
 function winHit(w,x,y){ if(w.el!=null&&ART.els[w.el]){ const n=ART.els[w.el].node, b=elMM(ART.els[w.el]);
     if(x<b.x||x>b.x+b.w||y<b.y||y>b.y+b.h) return false;
     try{ const wm=world.getScreenCTM(), nm=n.getScreenCTM(); if(wm&&nm&&n.isPointInFill){ const q=new DOMPoint(x,y).matrixTransform(wm).matrixTransform(nm.inverse()); return n.isPointInFill(new DOMPoint(q.x,q.y)); } }catch(e){}
     return true; }
-  const p=w.x!=null?w:pos(w); return Math.hypot(x-p.x,y-p.y)<=(w.r||4); }
-function ensureWindow(c){ if(!(c.kind==='led'||c.kind==='rgb')||c.side!=='B') return; const p=pos(c);
-  if(S.comps.some(w=>w.kind==='win'&&winHit(w,p.x,p.y))) return;
-  S.comps.push({id:UID++,kind:'win',u:p.x/GEO.W,v:p.y/GEO.H,el:null,r:4,mask:true,silk:false}); toast('Agregué una ventana sin cobre de Ø8 mm sobre el LED del reverso para que su luz se vea.'); }
+  return false; }
+/* Formas que pueden ser ventana: rellenas de negro (o casi) y cerradas, del mismo SVG importado */
+function closedShape(e){ const t=e.tag; if(['circle','ellipse','rect','polygon'].includes(t)) return true;
+  if(t!=='path') return false; const dd=(e.node.getAttribute('d')||'').trim(); if(!dd) return false;
+  const subs=dd.split(/(?=[Mm])/).map(x=>x.trim()).filter(Boolean); return subs.length>0&&subs.every(x=>/[Zz]\s*$/.test(x)); }
+function winOk(e){ return !!e&&e.tag!=='text'&&e.fill&&e.fill!=='none'&&e.fill!=='url'&&lum(e.fill)<0.3&&closedShape(e); }
+function winCandidates(){ return ART.els.filter(e=>winOk(e)&&isFrontEl(e)); }
 function winPolys(d){ const W=d.comps.filter(c=>c.kind==='win'); if(!W.length) return [];
   let geo=null; if(W.some(w=>w.el!=null)){ setLayerVis('all'); geo=artGeometry(); setLayerVis(S.view); }
   return W.map(w=>{ let polys=[]; const a=w.el!=null&&geo?geo.find(x=>x.e.i===w.el):null;
     if(a) polys=a.contours.filter((ct,k)=>!a.holes.has(k)&&ct.length>2);
-    if(!polys.length) polys=[Array.from({length:48},(_,k)=>[w.x+w.r*Math.cos(k*Math.PI/24),w.y+w.r*Math.sin(k*Math.PI/24)])];
-    return {w,polys}; }); }
+    return {w,polys}; }).filter(x=>x.polys.length); }
 function zoneRect(c){ if(c.el!=null&&ART.els[c.el]){const b=elMM(ART.els[c.el]); const k=0.66; return {x:b.cx-b.w*k/2,y:b.cy-b.h*k/2,w:b.w*k,h:b.h*k};} const p=pos(c); return {x:p.x-3.5,y:p.y-3.5,w:7,h:7}; }
 
 /* ---------- Diseño derivado: energía, pistas, piezas ---------- */
 function derive(){
   const W=GEO.W,H=GEO.H,fab=S.fab==='fab',P=PRODUCTS[S.product],mount=P.mounts[S.mount];
   const tw={sig:fab?0.25:0.4,pwr:fab?0.5:0.6,heat:fab?0.2:0.4,pitch:fab?0.5:0.9};
-  const comps=S.comps.map(c=>Object.assign({},c,pos(c))); comps.forEach(c=>{ if(c.kind==='led'&&c.side==='B') c.pkg='inv1206'; if(c.kind==='win'&&c.el==null) c.r=+c.r||4; });
+  const comps=S.comps.map(c=>Object.assign({},c,pos(c))); for(let k=comps.length-1;k>=0;k--){ const c=comps[k]; if(c.kind==='win'&&!(c.el!=null&&ART.els[c.el])) comps.splice(k,1); } comps.forEach(c=>{ if(c.kind==='led'&&c.side==='B') c.pkg='inv1206'; });
   let nD=0,nTP=0,nSW=0,nTH=0;
   comps.forEach(c=>{ if(c.kind==='led'||c.kind==='rgb') c.ref='D'+(++nD); if(c.kind==='touch') c.ref='TP'+(++nTP); if(c.kind==='button') c.ref='SW'+(++nSW); if(c.kind==='termo') c.ref='Z'+(++nTH); }); let nW=0; comps.forEach(c=>{ if(c.kind==='win') c.ref='W'+(++nW); });
   const has=k=>comps.some(c=>c.kind===k);
@@ -891,9 +886,8 @@ function drawComps(Dv){ const g=$('#compLayer'); g.innerHTML=''; SIM.glow.clear(
       else { const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g); const n=el('circle',{r:5,fill:PIGMENTS[c.pigment].cold},gg); SIM.zones.set(c.id,{node:n,cold:PIGMENTS[c.pigment].cold,hot:PIGMENTS[c.pigment].hot||GOLD}); if(S.sel===c.id) el('circle',{r:6,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'1 0.6'},gg); }
       return; }
     if(c.kind==='win'){ const fr=c.mask||!Dv.fab?FR4:mix(MASKS[S.mask],FR4,0.25), sel=S.sel===c.id;
-      if(c.el!=null&&ART.els[c.el]){ const b=elMM(ART.els[c.el]); if(S.view==='back'||sel) el('rect',{x:b.x-0.6,y:b.y-0.6,width:b.w+1.2,height:b.h+1.2,rx:1,fill:'none',stroke:sel?'#ffb27a':'#e9dca6','stroke-width':sel?0.3:0.2,'stroke-dasharray':'1 0.6'},g); }
-      else { const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g); el('circle',{r:c.r,fill:fr,stroke:'#b8ad7c','stroke-width':0.15},gg); if(sel) el('circle',{r:c.r+0.8,fill:'none',stroke:'#ffb27a','stroke-width':0.3,'stroke-dasharray':'1 0.6'},gg); }
-      if(S.view==='capas') label(g,c.x,c.y-(c.r||4)-0.8,c.ref,1.2); return; }
+      const b=elMM(ART.els[c.el]); if(S.view==='back'||sel) el('rect',{x:b.x-0.6,y:b.y-0.6,width:b.w+1.2,height:b.h+1.2,rx:1,fill:'none',stroke:sel?'#ffb27a':'#e9dca6','stroke-width':sel?0.3:0.2,'stroke-dasharray':'1 0.6'},g);
+      if(S.view==='capas') label(g,b.cx,b.y-0.8,c.ref,1.2); return; }
     const isB=(c.kind==='led'||c.kind==='rgb')&&c.side==='B';
     if(S.view==='back'&&!isB) return;
     if(S.view!=='back'&&isB){ const lit=Dv.comps.some(w=>w.kind==='win'&&winHit(w,c.x,c.y)); const gg=el('g',{'data-comp':c.id,class:'comp',transform:`translate(${r3(c.x)} ${r3(c.y)})`},g);
@@ -916,7 +910,10 @@ function drawComps(Dv){ const g=$('#compLayer'); g.innerHTML=''; SIM.glow.clear(
 }
 
 function drawHints(){ const g=$('#hintLayer'); g.innerHTML=''; if(S.view!=='front') return;
-  if(S.tool==='led'||S.tool==='rgb'){ eyeCandidates().forEach(a=>{ if(S.comps.some(c=>c.el===a.e.i)) return; el('circle',{cx:a.cx,cy:a.cy,r:Math.max(a.w,a.h)/2+1,fill:'none',stroke:'#ffd27a','stroke-width':0.3,'stroke-dasharray':'1 0.7',class:'pulse'},g); }); }
+  if(S.tool==='win'){ const wm=world.getScreenCTM(); if(!wm) return; const inv=wm.inverse();
+    winCandidates().forEach(e=>{ if(S.comps.some(c=>c.kind==='win'&&c.el===e.i)) return; const nm=e.node.getScreenCTM(); if(!nm) return; const m=inv.multiply(nm);
+      const cl=e.node.cloneNode(false); ['id','data-el','filter','clip-path','mask','style','class'].forEach(a=>cl.removeAttribute(a));
+      Object.entries({fill:'none',stroke:'#ffd27a','stroke-width':1.6,'stroke-dasharray':'4 3','vector-effect':'non-scaling-stroke','pointer-events':'none','data-wincand':e.i,class:'pulse',transform:`matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`}).forEach(([k,v])=>cl.setAttribute(k,v)); g.appendChild(cl); }); }
 }
 function drawEdge(){ const g=$('#edgeLayer'); g.innerHTML=''; if(S.view!=='capas'||!GEO.poly) return; el('polygon',{points:GEO.poly.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#ffd25a','stroke-width':0.2,'stroke-dasharray':'1 0.6'},g); }
 function drawDims(){ const g=$('#dimLayer'); g.innerHTML=''; const W=GEO.W,H=GEO.H,pad=Math.max(W,H)*0.12+6,fs=Math.max(2.2,Math.max(W,H)*0.035); const y=-pad*0.42,x=-pad*0.42; const st={stroke:'#8fb0a4','stroke-width':0.18};
@@ -993,7 +990,7 @@ function renderPanels(){
   const sb=$('#selBatt'); sb.innerHTML=`<option value="auto" ${S.battery==='auto'?'selected':''}>Automática (ahora: ${BATT[D.bk].short})</option>`+Object.keys(BATT).map(k=>`<option value="${k}" ${S.battery===k?'selected':''}>${BATT[k].label}</option>`).join('');
   $('#btnSim').setAttribute('aria-pressed',String(S.sim)); $('#btnSim').textContent=S.sim?'Detener prueba':'Probar encendido';
   $('#chkTraces').checked=S.traces;
-  const hints={select:'Arrastra componentes o sujeciones (círculos punteados) para moverlos. Supr borra el componente seleccionado.',led:'Toca el dibujo para poner un LED. Si tocas un ojo u otro punto pequeño, el LED se centra solo.',rgb:'Toca el dibujo para poner LEDs de colores. Se encadenan en orden alrededor del centro.',termo:'Toca una forma del dibujo para volverla zona termocrómica. Su calefactor va justo detrás.',touch:'Toca donde quieras el sensor: es un círculo de cobre que reacciona al dedo.',button:'El botón va en el reverso; tócalo donde quieras que quede.',win:'Toca una forma del dibujo para dejarla sin cobre, o cualquier punto para un círculo. Pon detrás un LED con la cara «Reverso» y su luz atravesará la fibra.'};
+  const hints={select:'Arrastra componentes o sujeciones (círculos punteados) para moverlos. Supr borra el componente seleccionado.',led:'Toca el dibujo justo donde quieres el LED: queda exactamente en ese punto. Arrástralo después para afinar.',rgb:'Toca el dibujo para poner LEDs de colores. Se encadenan en orden alrededor del centro.',termo:'Toca una forma del dibujo para volverla zona termocrómica. Su calefactor va justo detrás.',touch:'Toca donde quieras el sensor: es un círculo de cobre que reacciona al dedo.',button:'El botón va en el reverso; tócalo donde quieras que quede.',win:'Toca una forma negra y cerrada de tu dibujo (marcadas en amarillo) para dejarla sin cobre. Pon detrás un LED con la cara «Reverso» y su luz atravesará la fibra.'};
   $('#hint').textContent=(S.view==='back'?'Vista del reverso: las piezas en gris son provisionales, KiCad decide su lugar final. Aquí van batería, chip y calefactores. ':S.view==='capas'?'Capas superpuestas: la línea amarilla es el contorno que se exporta. ':'')+hints[S.tool];
   renderSel(); renderSummary();
 }
@@ -1004,13 +1001,12 @@ function renderToolOpts(){ const o=S.opt,t=S.tool; let h='';
   if(t==='select') h='<p class="note">Elige una interacción para agregarla, o toca un componente para editarlo a la derecha.</p>';
   if(t==='led') h=optSelect('tool','side',SIDES,o.side,'Cara')+(o.side==='B'?'<p class="note">LED 1206 de montaje inverso: se suelda en el reverso e ilumina hacia la placa. Su luz se ve a través de una ventana sin cobre.</p>':optSelect('tool','pkg',frontPkgs(),o.pkg,'Tipo de LED'))+colorChips('tool',o.color)+optSelect('tool','beh',BEH_LED,o.beh,'Comportamiento');
   if(t==='rgb') h=optSelect('tool','side',SIDES,o.side,'Cara')+(o.side==='B'?'<p class="note">SK6812MINI-E de montaje inverso en el reverso: su color se ve a través de una ventana sin cobre.</p>':'<p class="note">WS2812B-2020: LEDs de 2 mm que muestran cualquier color y se controlan en cadena.</p>')+optSelect('tool','rgbBeh',BEH_RGB,o.rgbBeh,'Efecto');
-  if(t==='win') h='<p class="note">Zona sin cobre en ambas caras y sin máscara: la fibra de vidrio (FR4) queda translúcida y deja ver la luz de un LED del reverso. Toca una forma del dibujo para usar su silueta, o cualquier punto para un círculo.</p>'+optSelect('tool','winR',WIN_R,String(o.winR),'Tamaño del círculo');
+  if(t==='win') h=`<p class="note">Zona sin cobre en ambas caras y sin máscara: la fibra de vidrio (FR4) queda translúcida y deja ver la luz de un LED del reverso. Toca una de las formas <b>negras y cerradas</b> de tu dibujo (marcadas en amarillo): la ventana toma su silueta exacta.</p>${winCandidates().length?'':'<p class="note"><b>Tu dibujo no tiene formas negras cerradas.</b> Dibuja en tu SVG las zonas que quieras translúcidas como formas cerradas rellenas de negro y vuelve a cargarlo.</p>'}`;
   if(t==='termo') h=optSelect('tool','pigment',PIGMENTS,o.pigment,'Pigmento')+optSelect('tool','act',ACT_TERMO,o.act,'Se calienta')+optSelect('tool','heater',HEATERS,o.heater,'Calefactor');
   if(t==='touch') h='<p class="note">Un círculo de cobre conectado al microcontrolador. Al tocarlo se activa todo lo marcado como “al tocar”.</p>';
   if(t==='button') h=optSelect('tool','action',{modo:'Cambia de modo',onoff:'Enciende y apaga'},o.action,'Función');
   $('#toolOpts').innerHTML=h; }
 function renderSuggest(){ const b=$('#suggestBox'); let h='';
-  if(S.view==='front'&&(S.tool==='led'||S.tool==='rgb')){ const c=eyeCandidates().filter(a=>!S.comps.some(x=>x.el===a.e.i)); if(c.length) h=`<span>Encontré <b>${c.length}</b> punto${c.length>1?'s':''} que parece${c.length>1?'n':''} ojos (marcados en amarillo).</span><button class="ghost" id="sgEyes">Poner un LED en cada uno</button>`; }
   if(S.tool==='termo'){ const c=termoCandidate(); if(c) h=`<span>La forma central grande es buena candidata para cambiar de color.</span><button class="ghost" id="sgTermo">Usarla como zona de calor</button>`; }
   if(S.tool==='touch'&&!S.comps.some(c=>c.kind==='touch')) h='<span>Un buen lugar es la frente o el centro del pecho: donde el dedo llega natural.</span>';
   b.innerHTML=h; }
@@ -1033,7 +1029,7 @@ function renderSel(){ const p=$('#selPanel'); if(typeof S.sel==='string'&&/^m\d+
       :`<div class="calc"><span>Serpentín: ${fmt(d.serp.len,0)} mm de pista de ${D.tw.heat} mm</span><span>Resistencia ≈ ${fmt(d.Rh,2)} Ω (cobre 35 µm)</span><span>Corriente a 3,7 V: ${fmt(d.heatI/1000,2)} A</span></div>`; }
   if(c.kind==='button') h+=optSelect('sel','action',{modo:'Cambia de modo',onoff:'Enciende y apaga'},c.action,'Función');
   if(c.kind==='touch') h+='<p class="note">Pad de cobre conectado al microcontrolador por una vía.</p>';
-  if(c.kind==='win'){ if(c.el==null) h+=optSelect('sel','r',WIN_R,String(c.r),'Tamaño'); else h+='<p class="note">Usa la silueta de la forma del dibujo que tocaste.</p>';
+  if(c.kind==='win'){ h+='<p class="note">Usa la silueta de la forma negra del dibujo que tocaste.</p>';
     h+=`<label class="field chk"><input type="checkbox" data-scope="sel" data-k="mask" ${c.mask?'checked':''}> Quitar la máscara en ambas caras (deja la fibra a la vista)</label><label class="field chk"><input type="checkbox" data-scope="sel" data-k="silk" ${c.silk?'checked':''}> Mantener la serigrafía del dibujo encima</label>`;
     const n=d.ref?D.comps.filter(x=>(x.kind==='led'||x.kind==='rgb')&&x.side==='B'&&winHit(d,x.x,x.y)).map(x=>x.ref):[]; h+=`<p class="note">Sin cobre en ninguna cara. ${n.length?'Ilumina: '+n.join(', ')+'.':'Ningún LED del reverso debajo todavía: pon uno con la cara «Reverso».'} La FR4 de 1,6 mm difunde la luz; con 0,8 mm se ve más nítida.</p>`; }
   p.innerHTML=h; }
@@ -1108,9 +1104,9 @@ $('#chkTraces').addEventListener('change',e=>{S.traces=e.target.checked; render(
 $('#btnSim').addEventListener('click',()=>setSim(!S.sim));
 $('#maskRow').addEventListener('click',e=>{const b=e.target.closest('[data-mask]'); if(b){S.mask=b.dataset.mask; render();}});
 function optChange(t){ const scope=t.dataset.scope,k=t.dataset.k; if(!scope) return; const v=t.dataset.v||t.value;
-  let val=t.type==='checkbox'?t.checked:(k==='r'||k==='winR')?+v:v;
-  if(scope==='tool') S.opt[{pkg:'pkg',color:'color',beh:'beh',rgbBeh:'rgbBeh',pigment:'pigment',act:'act',heater:'heater',action:'action',side:'side',winR:'winR'}[k]]=val;
-  else { const c=S.comps.find(x=>x.id===S.sel); if(c){ c[k]=val; if(k==='side') ensureWindow(c); } }
+  let val=t.type==='checkbox'?t.checked:v;
+  if(scope==='tool') S.opt[{pkg:'pkg',color:'color',beh:'beh',rgbBeh:'rgbBeh',pigment:'pigment',act:'act',heater:'heater',action:'action',side:'side'}[k]]=val;
+  else { const c=S.comps.find(x=>x.id===S.sel); if(c) c[k]=val; }
   render(); }
 document.addEventListener('change',e=>{ if(e.target.dataset&&e.target.dataset.scope) optChange(e.target);
   if(e.target.dataset&&e.target.dataset.mk&&typeof S.sel==='string'){ const i=+S.sel.slice(1), m=D.mounts[i], v=parseFloat(String(e.target.value).replace(',','.')); if(!m||!isFinite(v)) return;
@@ -1118,7 +1114,6 @@ document.addEventListener('change',e=>{ if(e.target.dataset&&e.target.dataset.sc
 document.addEventListener('click',e=>{ if(e.target.id==='mountAuto'&&typeof S.sel==='string'){ setMountPos(+S.sel.slice(1),null); render(); histCommit(); toast('Sujeción en su posición automática.'); } });
 document.addEventListener('click',e=>{ const b=e.target.closest('button.chip[data-scope]'); if(b) optChange(b);
   if(e.target.id==='selDel'){ S.comps=S.comps.filter(c=>c.id!==S.sel); S.sel=null; render(); }
-  if(e.target.id==='sgEyes'){ eyeCandidates().filter(a=>!S.comps.some(x=>x.el===a.e.i)).forEach(a=>addComp(S.tool,{x:a.cx,y:a.cy},a.e.i)); render(); toast('LEDs centrados en los puntos detectados.'); }
   if(e.target.id==='sgTermo'){ const c=termoCandidate(); if(c){ addComp('termo',{x:c.cx,y:c.cy},c.e.i); render(); } } });
 
 function loadText(text,name,withDemo){ if(sanitizeAndLoad(text,name)){ traceKey=''; computeGeo(); if(withDemo) demoComps(); S.tool=withDemo?'select':'led'; render(); if(!withDemo) toast('Dibujo cargado. Ahora elige qué quieres que haga.'); $('#st3').classList.add('focus'); setTimeout(()=>$('#st3').classList.remove('focus'),2200);} }
@@ -1129,7 +1124,8 @@ const drop=$('#drop');
 ['dragleave','drop'].forEach(t=>[drop,stage].forEach(n=>n.addEventListener(t,e=>{e.preventDefault(); drop.classList.remove('over'); if(t==='drop'&&e.dataTransfer.files.length) ingestFiles(e.dataTransfer.files);})));
 $('#btnSample').addEventListener('click',()=>loadText(OWL,'buho_ejemplo.svg',true));
 
-function demoComps(){ const eyes=eyeCandidates(); eyes.slice(0,2).forEach(a=>{const c=addComp('led',{x:a.cx,y:a.cy},a.e.i); c.pkg='s1206'; c.color='rojo'; c.beh='respiracion';});
+/* Ejemplo del búho: los LEDs van en las pupilas, en posiciones fijas del dibujo (unidades del SVG del búho) */
+function demoComps(){ [[70,90],[130,90]].forEach(([sx,sy])=>{ const c=addComp('led',{x:GEO.ox+(sx-ART.vb.x)*GEO.s,y:GEO.oy+(sy-ART.vb.y)*GEO.s},null); c.pkg='s1206'; c.color='rojo'; c.beh='respiracion'; });
   const t=termoCandidate(); if(t){const c=addComp('termo',{x:t.cx,y:t.cy},t.e.i); c.pigment='azul-rosa'; c.act='tacto'; c.heater='smd';}
   const fx=GEO.ox+(100-ART.vb.x)*GEO.s, fy=GEO.oy+(58-ART.vb.y)*GEO.s; addComp('touch',{x:fx,y:fy},null); S.sel=null; }
 
